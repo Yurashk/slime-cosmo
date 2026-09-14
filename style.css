@@ -107,7 +107,7 @@ body::before {
 
 .preview-slime {
   position: absolute;
-  top: 20px;
+  top: calc(12px + env(safe-area-inset-top) + 68px);
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none;
