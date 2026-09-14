@@ -70,7 +70,7 @@ const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
 const MAX_SLIME_KICK = 3.5;
 const MAX_SLIME_SPEED = 12;
-const EMOTIONS = ['smile', 'smile', 'uwu', 'happy', 'wink', 'blush', 'surprised', 'sleepy'];
+const EMOTIONS = ['sparkle', 'sparkle', 'happy', 'wink', 'surprised', 'sleepy', 'uwu', 'starry'];
 const ACCESSORIES = ['horns', 'catEars', 'glasses'];
 const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
@@ -1197,9 +1197,8 @@ function drawSlimes(ctx, now) {
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const emotion = slime.visualScaleY < 0.8 ? 'squint' : slime.emotion;
   const eyeY = sizeY * 0.05;
-  const eyeSpacing = sizeX * 0.16;
-  const eyeR = sizeX * 0.13;
-  const mouthY = sizeY * 0.16;
+  const eyeSpacing = sizeX * 0.17;
+  const eyeR = sizeX * 0.15;
 
   let gx = slime.body.velocity.x;
   let gy = slime.body.velocity.y;
@@ -1221,18 +1220,21 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const SCLERA = '#ffffff';
   const PUPIL = '#21242e';
   const RIM = 'rgba(0, 0, 0, 0.22)';
-  const PINK = 'rgba(255, 150, 190, 0.55)';
 
   ctx.save();
   ctx.shadowBlur = 0;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const blushy = emotion === 'blush' || emotion === 'uwu';
-  const closedEye = emotion === 'sleepy';
-  const winkLeft = emotion === 'wink';
+  const drawGlint = (ex, ey) => {
+    ctx.beginPath();
+    ctx.arc(ex + eyeR * 0.2, ey - eyeR * 0.22, eyeR * 0.16, 0, Math.PI * 2);
+    ctx.fillStyle = SCLERA;
+    ctx.fill();
+  };
 
-  const drawRoundEye = (ex, ey, s) => {
+  const drawRoundEye = (ex, ey, pupilMode) => {
+    const pr = pupilMode === 'tiny' ? eyeR * 0.38 : eyeR * 0.55;
     ctx.beginPath();
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.fillStyle = SCLERA;
@@ -1243,23 +1245,45 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     ctx.lineWidth = Math.max(1, eyeR * 0.12);
     ctx.strokeStyle = RIM;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(ex + lx * eyeR * 0.4, ey + ly * eyeR * 0.4, eyeR * 0.55, 0, Math.PI * 2);
+
+    const px = ex + lx * eyeR * 0.4;
+    const py = ey + ly * eyeR * 0.4;
     ctx.fillStyle = PUPIL;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(ex + lx * eyeR * 0.4 + eyeR * 0.18, ey + ly * eyeR * 0.4 - eyeR * 0.18, eyeR * 0.17, 0, Math.PI * 2);
-    ctx.fillStyle = SCLERA;
-    ctx.fill();
+    if (pupilMode === 'heart') {
+      ctx.beginPath();
+      const s = pr * 1.15;
+      ctx.moveTo(px, py + s * 0.5);
+      ctx.bezierCurveTo(px - s * 1.1, py - s * 0.35, px - s * 0.55, py - s * 1.0, px, py - s * 0.5);
+      ctx.bezierCurveTo(px + s * 0.55, py - s * 1.0, px + s * 1.1, py - s * 0.35, px, py + s * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (pupilMode === 'star') {
+      ctx.beginPath();
+      const R = pr * 1.25, r = pr * 0.55;
+      for (let i = 0; i < 10; i++) {
+        const rad = i % 2 === 0 ? R : r;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const xx = px + Math.cos(a) * rad;
+        const yy = py + Math.sin(a) * rad;
+        if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    drawGlint(px, py);
   };
 
-  const drawArcEye = (ex, ey, down) => {
+  const drawArcEye = (ex, ey, up) => {
     ctx.beginPath();
-    ctx.arc(ex, ey, eyeR * 0.85, down ? 0 : Math.PI, down ? Math.PI : Math.PI * 2);
+    ctx.arc(ex, ey, eyeR * 0.95, up ? Math.PI : 0, up ? Math.PI * 2 : Math.PI);
     ctx.strokeStyle = PUPIL;
-    ctx.lineWidth = Math.max(2.2, eyeR * 0.42);
+    ctx.lineWidth = Math.max(2.4, eyeR * 0.42);
     ctx.stroke();
-    if (!down) {
+    if (up) {
       ctx.lineWidth = Math.max(1.4, eyeR * 0.55);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
@@ -1269,59 +1293,50 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     }
   };
 
-  const drawEyeAt = (ex, ey, s) => {
-    if (closedEye) {
-      drawArcEye(ex, ey, true);
-    } else if (winkLeft !== (s < 0) && emotion === 'wink') {
-      drawRoundEye(ex, ey, s);
-    } else if (emotion === 'wink') {
-      drawArcEye(ex, ey, true);
-    } else if (emotion === 'surprised') {
-      drawRoundEye(ex, ey, s);
-    } else {
-      drawRoundEye(ex, ey, s);
-    }
-  };
+  const eyeOff = (s) => ({
+    x: s * eyeSpacing * 0.5 + lx * eyeSpacing * 0.15,
+    y: eyeY + ly * eyeSpacing * 0.15
+  });
 
   if (emotion === 'squint') {
-    drawArcEye(-eyeSpacing * 0.5, eyeY, false);
-    drawArcEye(eyeSpacing * 0.5, eyeY, true);
-  } else {
-    drawEyeAt(-eyeSpacing * 0.5 + lx * eyeSpacing * 0.15, eyeY + ly * eyeSpacing * 0.15, -1);
-    drawEyeAt(eyeSpacing * 0.5 + lx * eyeSpacing * 0.15, eyeY + ly * eyeSpacing * 0.15, 1);
-  }
-
-  if (blushy) {
-    ctx.fillStyle = PINK;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeSpacing * 0.92, eyeY + eyeR * 0.85, eyeR * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  const mw = eyeSpacing * 0.55;
-  ctx.strokeStyle = PUPIL;
-  ctx.lineWidth = Math.max(1.8, eyeR * 0.34);
-  if (emotion === 'uwu') {
-    for (const s of [-1, 0, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * mw * 0.5, mouthY, mw * 0.26, Math.PI, Math.PI * 2);
-      ctx.stroke();
-    }
-  } else if (emotion === 'surprised') {
     ctx.beginPath();
-    ctx.arc(0, mouthY - eyeR * 0.15, eyeR * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(-eyeSpacing * 0.85, eyeY - eyeR * 0.4);
+    ctx.lineTo(-eyeSpacing * 0.15, eyeY + eyeR * 0.3);
+    ctx.moveTo(eyeSpacing * 0.85, eyeY - eyeR * 0.4);
+    ctx.lineTo(eyeSpacing * 0.15, eyeY + eyeR * 0.3);
+    ctx.strokeStyle = PUPIL;
+    ctx.lineWidth = Math.max(2.4, eyeR * 0.45);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-eyeSpacing * 0.85, eyeY + eyeR * 0.4);
+    ctx.lineTo(-eyeSpacing * 0.15, eyeY - eyeR * 0.3);
+    ctx.moveTo(eyeSpacing * 0.85, eyeY + eyeR * 0.4);
+    ctx.lineTo(eyeSpacing * 0.15, eyeY - eyeR * 0.3);
+    ctx.lineWidth = Math.max(1.8, eyeR * 0.35);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.stroke();
+  } else if (emotion === 'happy') {
+    drawArcEye(eyeOff(-1).x, eyeY, true);
+    drawArcEye(eyeOff(1).x, eyeY, true);
   } else if (emotion === 'sleepy') {
-    ctx.beginPath();
-    ctx.moveTo(-mw * 0.6, mouthY);
-    ctx.lineTo(mw * 0.6, mouthY);
-    ctx.stroke();
+    drawArcEye(eyeOff(-1).x, eyeY + eyeR * 0.2, false);
+    drawArcEye(eyeOff(1).x, eyeY + eyeR * 0.2, false);
+  } else if (emotion === 'wink') {
+    drawRoundEye(eyeOff(1).x, eyeOff(1).y, 'normal');
+    drawArcEye(-eyeSpacing * 0.5 + lx * eyeSpacing * 0.15, eyeY + ly * eyeSpacing * 0.15, false);
+  } else if (emotion === 'surprised') {
+    drawRoundEye(eyeOff(-1).x, eyeOff(-1).y, 'tiny');
+    drawRoundEye(eyeOff(1).x, eyeOff(1).y, 'tiny');
+  } else if (emotion === 'uwu') {
+    drawRoundEye(eyeOff(-1).x, eyeOff(-1).y, 'heart');
+    drawRoundEye(eyeOff(1).x, eyeOff(1).y, 'heart');
+  } else if (emotion === 'starry') {
+    drawRoundEye(eyeOff(-1).x, eyeOff(-1).y, 'star');
+    drawRoundEye(eyeOff(1).x, eyeOff(1).y, 'star');
   } else {
-    ctx.beginPath();
-    ctx.arc(0, mouthY - mw * 0.15, mw * 0.72, Math.PI, Math.PI * 2);
-    ctx.stroke();
+    drawRoundEye(eyeOff(-1).x, eyeOff(-1).y, 'normal');
+    drawRoundEye(eyeOff(1).x, eyeOff(1).y, 'normal');
   }
 
   ctx.restore();
@@ -1364,8 +1379,8 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
     }
   } else if (acc === 'glasses') {
     const eyeY = sizeY * 0.05;
-    const eyeSpacing = sizeX * 0.16;
-    const gR = sizeX * 0.125;
+    const eyeSpacing = sizeX * 0.17;
+    const gR = sizeX * 0.145;
     for (const s of [-1, 1]) {
       ctx.beginPath();
       ctx.arc(s * eyeSpacing * 0.5, eyeY, gR, 0, Math.PI * 2);
