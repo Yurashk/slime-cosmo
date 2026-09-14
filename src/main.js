@@ -30,7 +30,6 @@ const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
 const finalScoreEl = document.getElementById('final-score');
 const finalMaxLevelEl = document.getElementById('final-max-level');
-const balanceWarningEl = document.getElementById('balance-warning');
 
 let engine, runner;
 let bowlBody, bowlBottom, bowlLeft, bowlRight;
@@ -54,12 +53,6 @@ let targetX = null;
 let renderPreviewX = null;
 let dragOriginX = null;
 let dragStartPreviewX = 0;
-
-let comboCount = 0;
-let lastComboAt = -99999;
-let dangerTilt = 0;
-let shakeAmp = 0;
-let floatTexts = [];
 
 const BOWL_WIDTH = 480;
 const BOWL_HEIGHT = 300;
@@ -493,12 +486,6 @@ function handleCosmicAttraction() {
           tentacles.push({ a, b, phase: Math.random() * 100, color: lightenColor(a.config.color, 25) });
         }
 
-        if (gap > MERGE_OVERLAP_GAP * layoutScale) {
-          const pull = Math.min(5, gap * 0.6);
-          Body.applyForce(a.body, a.body.position, { x: dhat.x * a.body.mass * pull * 0.02, y: dhat.y * a.body.mass * pull * 0.02 });
-          Body.applyForce(b.body, b.body.position, { x: -dhat.x * b.body.mass * pull * 0.02, y: -dhat.y * b.body.mass * pull * 0.02 });
-        }
-
         if (gap <= MERGE_OVERLAP_GAP * layoutScale) {
           performMerge(a, b);
           return;
@@ -532,11 +519,6 @@ function handleLandingSquish(pair) {
   const squash = Math.min(1.15, impactSpeed * 0.09);
   if (aSlime) aSlime.elastic = Math.max(aSlime.elastic, squash);
   if (bSlime) bSlime.elastic = Math.max(bSlime.elastic, squash);
-  if (impactSpeed > 5.5) {
-    const until = performance.now() + 480;
-    if (aSlime) aSlime.reaction = { type: 'surprised', until };
-    if (bSlime) bSlime.reaction = { type: 'surprised', until };
-  }
 }
 
 function aabbOverlaps(x, y, half, body) {
@@ -589,15 +571,7 @@ function performMerge(a, b) {
   Composite.remove(engine.world, bodyB);
   slimes = slimes.filter(s => s.body !== bodyA && s.body !== bodyB);
 
-  const nowMs = performance.now();
-  if (nowMs - lastComboAt < 1800) {
-    comboCount += 1;
-  } else {
-    comboCount = 1;
-  }
-  lastComboAt = nowMs;
-
-  createMergeEffect(anchorX, midY, config, comboCount);
+  createMergeEffect(anchorX, midY, config);
 
   const spawnPos = findMergePosition(anchorX, midY, config);
 
@@ -607,7 +581,6 @@ function performMerge(a, b) {
   newSlime.mergeAnim = { elapsed: 0, duration: 300 };
   newSlime.body.plugin.mergeCooldown = MERGE_COOLDOWN;
   newSlime.mergeAnchor = { x: anchorX, y: midY };
-  newSlime.reaction = { type: 'happy', until: nowMs + 900 };
   slimes.push(newSlime);
   Composite.add(engine.world, newSlime.body);
 
@@ -622,34 +595,6 @@ function performMerge(a, b) {
   score += scoreGain;
   maxLevelReached = Math.max(maxLevelReached, level + 1);
   updateUI();
-
-  floatTexts.push({
-    x: anchorX,
-    y: midY - config.radius * 1.4,
-    text: `+${scoreGain}`,
-    color: config.glowColor,
-    size: Math.max(13, config.radius * 0.5),
-    life: 800,
-    vy: 0.9,
-    pop: true,
-    elapsed: 0,
-    bold: 1
-  });
-
-  if (comboCount >= 2) {
-    floatTexts.push({
-      x: anchorX,
-      y: midY - config.radius * 2.4 - 16,
-      text: `COMBO x${comboCount}`,
-      color: comboCount >= 5 ? '#ff4bd6' : (comboCount >= 3 ? '#ffd54e' : '#5af0ff'),
-      size: Math.min(30, 17 + comboCount * 1.6),
-      life: 1100,
-      vy: 0.55,
-      pop: true,
-      elapsed: 0,
-      bold: 2
-    });
-  }
 
   applyBlastWave(spawnPos.x, spawnPos.y, level + 1);
 }
@@ -672,8 +617,7 @@ function handleCollisionStart(event) {
   }
 }
 
-function createMergeEffect(x, y, config, combo) {
-  const boost = combo > 1 ? Math.min(1.6, 0.35 + combo * 0.2) : 0;
+function createMergeEffect(x, y, config) {
   mergeEffects.push({
     x, y,
     color: config.glowColor,
@@ -682,12 +626,12 @@ function createMergeEffect(x, y, config, combo) {
     time: 0,
     duration: 400,
     particles: [],
-    shockwave: { radius: 0, maxRadius: config.radius * (3.2 + boost * 1.6) * layoutScale, alpha: 1 },
-    flash: { scale: 0.5 + boost * 0.5, alpha: 1 }
+    shockwave: { radius: 0, maxRadius: config.radius * 3.2 * layoutScale, alpha: 1 },
+    flash: { scale: 0.5, alpha: 1 }
   });
 
   const effect = mergeEffects[mergeEffects.length - 1];
-  const particleCount = Math.round((10 + Math.random() * 6) * (1 + boost * 0.8));
+  const particleCount = 10 + Math.floor(Math.random() * 6);
 
   for (let i = 0; i < particleCount; i++) {
     const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.5;
@@ -764,8 +708,6 @@ function triggerGameOver() {
   }
   finalScoreEl.textContent = score.toLocaleString();
   finalMaxLevelEl.textContent = maxLevelReached;
-  shakeAmp = 0;
-  balanceWarningEl.classList.add('hidden');
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
 }
@@ -777,12 +719,6 @@ function restartGame() {
   slimes = [];
   mergeEffects.length = 0;
   tentacles.length = 0;
-  floatTexts.length = 0;
-  comboCount = 0;
-  lastComboAt = -99999;
-  dangerTilt = 0;
-  shakeAmp = 0;
-  balanceWarningEl.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
 
   Composite.clear(engine.world, false);
@@ -842,23 +778,13 @@ function updateMergeEffects() {
 
 function updateSlimesVisual() {
   const dt = 16.67;
-  const now = performance.now();
   for (const slime of slimes) {
-    if (slime.reaction && now > slime.reaction.until) {
-      slime.reaction = null;
-    }
-
     if (slime.mergeAnim) {
       slime.mergeAnim.elapsed += dt;
       const progress = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       slime.opacity = eased;
-      let pop = 0.3 + 0.7 * eased;
-      if (progress >= 0.7) {
-        const p2 = (progress - 0.7) / 0.3;
-        pop += 0.09 * Math.sin(p2 * Math.PI);
-      }
-      slime.mergedScale = pop;
+      slime.mergedScale = 0.3 + 0.7 * eased;
 
       if (slime.mergeAnchor) {
         Body.setPosition(slime.body, slime.mergeAnchor);
@@ -881,82 +807,6 @@ function updateSlimesVisual() {
   }
 }
 
-function updateFloatTexts() {
-  const dt = 16.67;
-  for (let i = floatTexts.length - 1; i >= 0; i--) {
-    const t = floatTexts[i];
-    t.elapsed += dt;
-    t.y -= t.vy * (dt / 16.67);
-    t.vy *= 0.985;
-    if (t.elapsed >= t.life) floatTexts.splice(i, 1);
-  }
-}
-
-function computeBalance() {
-  if (slimes.length === 0 || isGameOver) {
-    dangerTilt = 0;
-    shakeAmp = 0;
-    balanceWarningEl.classList.add('hidden');
-    return;
-  }
-  let sx = 0;
-  let sy = 0;
-  let wsum = 0;
-  for (const slime of slimes) {
-    if (slime.body.isRemoved) continue;
-    const w = slime.config.level;
-    sx += slime.body.position.x * w;
-    sy += slime.body.position.y * w;
-    wsum += w;
-  }
-  if (wsum <= 0) {
-    dangerTilt = 0;
-    balanceWarningEl.classList.add('hidden');
-    return;
-  }
-  const stackX = sx / wsum;
-  const stackY = sy / wsum;
-  const half = Math.max(90, bowlSafeHalfWidth(stackY) * 0.85);
-  dangerTilt = Math.max(0, Math.min(1, Math.abs(stackX - bowlCenterX) / half));
-
-  if (dangerTilt > 0.78) {
-    shakeAmp = 2.2;
-    balanceWarningEl.classList.remove('hidden');
-  } else if (dangerTilt > 0.62) {
-    shakeAmp = 1.2;
-    balanceWarningEl.classList.remove('hidden');
-  } else {
-    shakeAmp = 0;
-    balanceWarningEl.classList.add('hidden');
-  }
-}
-
-function drawFloatTexts(ctx) {
-  for (const t of floatTexts) {
-    const p = t.elapsed / t.life;
-    const alpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, (p - 0.55) / 0.45);
-    if (alpha <= 0) continue;
-    const scale = t.pop ? 1 + 0.35 * Math.sin(Math.min(p / 0.25, 1) * Math.PI) : 1;
-
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, alpha);
-    ctx.translate(t.x, t.y);
-    ctx.scale(scale, scale);
-    ctx.font = `${t.bold === 2 ? 800 : 700} ${t.size}px 'Segoe UI', 'Arial', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = t.color;
-    ctx.shadowBlur = t.size * 0.5;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(t.text, 0, 0);
-    ctx.fillStyle = t.color;
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = Math.max(0, alpha) * 0.9;
-    ctx.fillText(t.text, 0, 1.5);
-    ctx.restore();
-  }
-}
-
 function updateParticles() {
   const bodies = Composite.allBodies(engine.world);
   for (const body of bodies) {
@@ -976,12 +826,10 @@ function updateParticles() {
 }
 
 function gameLoop() {
-  updateFloatTexts();
   if (!isGameOver) {
     updateParticles();
     updateMergeEffects();
     updateSlimesVisual();
-    computeBalance();
     checkGameOver();
   }
 
@@ -998,37 +846,11 @@ function renderCustom() {
   const now = performance.now();
 
   drawBackground(ctx, width, height, now);
-
-  if (dangerTilt > 0.55) {
-    const strength = Math.min(0.3, (dangerTilt - 0.55) * 0.55);
-    ctx.save();
-    ctx.globalAlpha = strength;
-    const midX = canvasRect.width / 2;
-    const midY = canvasRect.height * 0.6;
-    const rad = Math.max(width, height) * 0.62;
-    const vg = ctx.createRadialGradient(midX, midY, rad * 0.35, midX, midY, rad);
-    vg.addColorStop(0, 'rgba(255, 40, 40, 0)');
-    vg.addColorStop(1, 'rgba(255, 40, 40, 1)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  }
-
-  const shx = shakeAmp * (Math.random() * 2 - 1);
-  const shy = shakeAmp * (Math.random() * 2 - 1);
-  if (shx || shy) {
-    ctx.save();
-    ctx.translate(shx, shy);
-  }
-
   drawStars(ctx, now);
   drawBowl(ctx);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
   drawSlimes(ctx, now);
-  drawFloatTexts(ctx);
-
-  if (shx || shy) ctx.restore();
 }
 
 function drawBackground(ctx, width, height) {
@@ -1402,14 +1224,7 @@ function drawSlimes(ctx, now) {
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const eyeY = -sizeY * 0.05;
   const eyeSpacing = sizeX * 0.28;
-  const baseEyeR = sizeX * 0.15;
-
-  const fallExcited = !isGameOver && slime.body.position.y < bowlYTop - 30 && slime.body.velocity.y > 2.5;
-  const reaction = slime.reaction;
-  const happy = !!reaction && reaction.type === 'happy' && now < reaction.until;
-  const surprised = !!reaction && reaction.type === 'surprised' && now < reaction.until;
-  const worried = !happy && !surprised && dangerTilt > 0.68;
-  const mode = happy ? 'happy' : surprised ? 'surprised' : fallExcited ? 'excited' : 'plain';
+  const eyeR = sizeX * 0.15;
 
   let gx = slime.body.velocity.x;
   let gy = slime.body.velocity.y;
@@ -1432,33 +1247,10 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const PUPIL = '#21242e';
   const RIM = 'rgba(0, 0, 0, 0.22)';
 
-  const eyeR = surprised ? baseEyeR * 1.1 : baseEyeR;
-  const pupilR = surprised ? eyeR * 0.4 : mode === 'excited' ? eyeR * 0.62 : eyeR * 0.55;
-
   ctx.save();
   ctx.shadowBlur = 0;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-
-  if (mode === 'happy') {
-    for (const s of [-1, 1]) {
-      const ex = s * eyeSpacing * 0.5 + lx * eyeSpacing * 0.15;
-      const ey = eyeY + ly * eyeSpacing * 0.15;
-      ctx.beginPath();
-      ctx.arc(ex, ey, eyeR * 0.95, Math.PI, Math.PI * 2);
-      ctx.strokeStyle = PUPIL;
-      ctx.lineWidth = Math.max(2.4, eyeR * 0.42);
-      ctx.stroke();
-      ctx.lineWidth = Math.max(1.4, eyeR * 0.55);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-      ctx.shadowBlur = 4;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-    ctx.restore();
-    return;
-  }
 
   for (const s of [-1, 1]) {
     const ex = s * eyeSpacing * 0.5 + lx * eyeSpacing * 0.15;
@@ -1475,39 +1267,16 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     ctx.strokeStyle = RIM;
     ctx.stroke();
 
-    const px = ex + lx * eyeR * 0.4 - (worried ? s * eyeR * 0.1 : 0);
-    const py = ey + ly * eyeR * 0.4 + (worried ? eyeR * 0.12 : 0);
+    const px = ex + lx * eyeR * 0.4;
+    const py = ey + ly * eyeR * 0.4;
     ctx.beginPath();
-    ctx.arc(px, py, pupilR, 0, Math.PI * 2);
+    ctx.arc(px, py, eyeR * 0.55, 0, Math.PI * 2);
     ctx.fillStyle = PUPIL;
     ctx.fill();
     ctx.beginPath();
     ctx.arc(px + eyeR * 0.18, py - eyeR * 0.18, eyeR * 0.17, 0, Math.PI * 2);
     ctx.fillStyle = SCLERA;
     ctx.fill();
-
-    if (mode === 'excited') {
-      ctx.beginPath();
-      ctx.arc(ex + s * eyeR * 0.4, ey - eyeR * 0.42, Math.max(0.8, eyeR * 0.09), 0, Math.PI * 2);
-      ctx.fillStyle = SCLERA;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(ex - eyeR * 0.05, ey + eyeR * 0.18, Math.max(0.8, eyeR * 0.07), 0, Math.PI * 2);
-      ctx.fillStyle = SCLERA;
-      ctx.fill();
-    }
-
-    if (worried) {
-      const browLift = 0.22;
-      ctx.beginPath();
-      ctx.moveTo(ex - eyeR * 0.78, ey - eyeR * (0.9 + browLift));
-      ctx.lineTo(ex + eyeR * 0.62, ey - eyeR * (0.6 + browLift));
-      ctx.strokeStyle = PUPIL;
-      ctx.lineWidth = Math.max(1.4, eyeR * 0.16);
-      ctx.globalAlpha = 0.8;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
   }
 
   ctx.restore();

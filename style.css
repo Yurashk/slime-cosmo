@@ -225,28 +225,6 @@ body::before {
   text-overflow: ellipsis;
 }
 
-.balance-warning {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top) + 68px);
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: clamp(14px, 2.6vw, 20px);
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #ff5959;
-  text-shadow: 0 0 12px rgba(255, 60, 60, 0.9), 0 0 26px rgba(255, 60, 60, 0.5);
-  z-index: 6;
-  pointer-events: none;
-  animation: balance-blink 0.55s ease-in-out infinite;
-  white-space: nowrap;
-}
-
-@keyframes balance-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
 .restart-btn {
   position: absolute;
   bottom: calc(12px + env(safe-area-inset-bottom));
@@ -289,10 +267,6 @@ body::before {
   justify-content: center;
   z-index: 100;
   animation: fade-in 0.3s ease-out;
-}
-
-.hidden {
-  display: none !important;
 }
 
 .overlay.hidden {
