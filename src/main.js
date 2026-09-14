@@ -46,6 +46,10 @@ let dpr = 1;
 let layoutScale = 1;
 let bowlCenterX = 0, bowlYTop = 0, bowlYBottom = 0, bowlHalfTop = 0, bowlHalfBottom = 0;
 let lastBowlWidth = 0;
+let targetX = null;
+let renderPreviewX = null;
+let dragOriginX = null;
+let dragStartPreviewX = 0;
 
 const BOWL_WIDTH = 480;
 const BOWL_HEIGHT = 300;
@@ -221,7 +225,7 @@ function setupEventListeners() {
 
 function handleMouseMove(e) {
   if (isGameOver) return;
-  mouseX = e.clientX - canvasRect.left;
+  targetX = e.clientX - canvasRect.left;
   updatePreviewPosition();
 }
 
@@ -233,18 +237,25 @@ function handleMouseDown(e) {
 function handleTouchMove(e) {
   if (isGameOver) return;
   const touch = e.touches[0];
-  mouseX = touch.clientX - canvasRect.left;
+  const x = touch.clientX - canvasRect.left;
+  if (dragOriginX !== null) {
+    targetX = dragStartPreviewX + (x - dragOriginX);
+  }
   updatePreviewPosition();
 }
 
 function handleTouchStart(e) {
   if (isGameOver) return;
   const touch = e.touches[0];
-  mouseX = touch.clientX - canvasRect.left;
+  const x = touch.clientX - canvasRect.left;
+  dragOriginX = x;
+  dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
+  targetX = dragStartPreviewX;
   updatePreviewPosition();
 }
 
 function handleTouchEnd(e) {
+  dragOriginX = null;
   if (isGameOver) return;
   dropSlime();
 }
@@ -259,7 +270,9 @@ function handleKeyDown(e) {
 function updatePreviewPosition() {
   const centerX = canvasRect.width / 2;
   const halfWidth = bowlW() / 2 - 35;
-  const clampedX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, mouseX));
+  const desiredX = targetX != null ? targetX : centerX;
+  const clampedX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, desiredX));
+  renderPreviewX = clampedX;
 
   previewEl.style.left = clampedX + 'px';
   previewEl.style.transform = 'translateX(-50%)';
@@ -273,8 +286,9 @@ function updatePreviewPosition() {
 function updatePreview() {
   if (!currentPreviewConfig) return;
 
-  previewEl.style.width = (currentPreviewConfig.radius * 2) + 'px';
-  previewEl.style.height = (currentPreviewConfig.radius * 2) + 'px';
+  const size = currentPreviewConfig.radius * 2 * layoutScale;
+  previewEl.style.width = size + 'px';
+  previewEl.style.height = size + 'px';
   previewEl.style.borderRadius = '22%';
   previewEl.style.background = `radial-gradient(circle at 30% 30%, ${currentPreviewConfig.color}, ${currentPreviewConfig.glowColor})`;
   previewEl.style.boxShadow = `0 0 20px ${currentPreviewConfig.glowColor}, 0 0 40px ${currentPreviewConfig.glowColor}`;
@@ -308,8 +322,9 @@ function dropSlime() {
   lastDropTime = now;
 
   const centerX = canvasRect.width / 2;
-  const halfWidth = bowlW() / 2 - currentPreviewConfig.radius - 12;
-  const dropX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, mouseX));
+  const halfWidth = bowlW() / 2 - currentPreviewConfig.radius * layoutScale - 12;
+  const baseX = renderPreviewX != null ? renderPreviewX : centerX;
+  const dropX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, baseX));
   const dropY = Math.max(50, canvasRect.height * 0.16);
 
   const slime = createSlime(dropX, dropY, currentPreviewConfig);
@@ -323,14 +338,14 @@ function dropSlime() {
 }
 
 function createSlime(x, y, config) {
-  const side = config.radius * 2;
+  const side = config.radius * 2 * layoutScale;
   const body = Bodies.rectangle(x, y, side, side, {
     density: config.density,
     restitution: Math.min(config.restitution, 0.20),
     friction: 0.5,
     frictionAir: 0.05,
     frictionStatic: 0.5,
-    chamfer: { radius: config.chamfer },
+    chamfer: { radius: config.chamfer * layoutScale },
     render: {
       fillStyle: config.color,
       strokeStyle: config.glowColor,
@@ -372,8 +387,8 @@ function dampenSlimeSpin() {
     const vx = slime.body.velocity.x;
     const vy = slime.body.velocity.y;
     const spd = Math.hypot(vx, vy);
-    if (spd > MAX_SLIME_SPEED) {
-      const k = MAX_SLIME_SPEED / spd;
+    if (spd > MAX_SLIME_SPEED * layoutScale) {
+      const k = MAX_SLIME_SPEED * layoutScale / spd;
       Body.setVelocity(slime.body, { x: vx * k, y: vy * k });
     }
   }
@@ -413,7 +428,7 @@ function handleCosmicAttraction() {
     if (dist < 1) { tentacles.splice(i, 1); continue; }
     const dhat = { x: dx / dist, y: dy / dist };
     const gap = dist - bodySupport(t.a.body, dhat) - bodySupport(t.b.body, { x: -dhat.x, y: -dhat.y });
-    if (gap > TENTACLE_RANGE + 1) {
+    if (gap > TENTACLE_RANGE * layoutScale + 1) {
       tentacles.splice(i, 1);
     }
   }
@@ -440,7 +455,7 @@ function handleCosmicAttraction() {
       const supportB = bodySupport(b.body, { x: -dhat.x, y: -dhat.y });
       const gap = dist - supportA - supportB;
 
-      if (gap <= TENTACLE_RANGE) {
+      if (gap <= TENTACLE_RANGE * layoutScale) {
         const alreadyHas = tentacles.some(
           t => (t.a === a && t.b === b) || (t.a === b && t.b === a)
         );
@@ -448,7 +463,7 @@ function handleCosmicAttraction() {
           tentacles.push({ a, b, phase: Math.random() * 100, color: lightenColor(a.config.color, 25) });
         }
 
-        if (gap <= MERGE_OVERLAP_GAP) {
+        if (gap <= MERGE_OVERLAP_GAP * layoutScale) {
           performMerge(a, b);
           return;
         }
@@ -489,7 +504,7 @@ function aabbOverlaps(x, y, half, body) {
 }
 
 function findMergePosition(x, y, config) {
-  const half = config.radius;
+  const half = config.radius * layoutScale;
   let cx = x, cy = y;
   for (let i = 0; i < 90; i++) {
     let free = true;
@@ -523,7 +538,7 @@ function performMerge(a, b) {
   const midX = (lower.body.position.x + upper.body.position.x) / 2;
   const midY = lower.body.position.y;
 
-  const safeHalf = Math.max(0, bowlSafeHalfWidth(midY) - config.radius - wallT() * 0.5);
+  const safeHalf = Math.max(0, bowlSafeHalfWidth(midY) - config.radius * layoutScale - wallT() * 0.5);
   const anchorX = Math.max(bowlCenterX - safeHalf, Math.min(bowlCenterX + safeHalf, midX));
 
   const bodyA = a.body;
@@ -584,11 +599,11 @@ function createMergeEffect(x, y, config) {
     x, y,
     color: config.glowColor,
     color2: config.color,
-    radius: config.radius,
+    radius: config.radius * layoutScale,
     time: 0,
     duration: 400,
     particles: [],
-    shockwave: { radius: 0, maxRadius: config.radius * 3.2, alpha: 1 },
+    shockwave: { radius: 0, maxRadius: config.radius * 3.2 * layoutScale, alpha: 1 },
     flash: { scale: 0.5, alpha: 1 }
   });
 
@@ -623,13 +638,13 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
     const dy = slime.body.position.y - centerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < BLAST_RADIUS && dist > 1) {
+    if (dist < BLAST_RADIUS * layoutScale && dist > 1) {
       const slimeConfig = slime.config;
       const lr = slimeConfig.radius;
       const slimeMass = lr * lr * 4 * slimeConfig.density;
 
-      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 50 + 1));
-      const cappedKick = Math.min(kick, MAX_SLIME_KICK);
+      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 50 + 1)) * layoutScale;
+      const cappedKick = Math.min(kick, MAX_SLIME_KICK * layoutScale);
       const force = cappedKick * slimeMass;
       const forceX = (dx / dist) * force;
       const forceY = (dy / dist) * force;
@@ -1076,12 +1091,12 @@ function drawSlimes(ctx, now) {
     const body = slime.body;
     const config = slime.config;
     const pos = body.position;
-    const r = config.radius;
+    const r = config.radius * layoutScale;
     const scale = slime.mergedScale !== undefined ? slime.mergedScale : 1;
 
     const sizeX = r * 2 * slime.visualScaleX * scale;
     const sizeY = r * 2 * slime.visualScaleY * scale;
-    const chamfer = config.chamfer;
+    const chamfer = config.chamfer * layoutScale;
 
     let glowColor = config.glowColor;
     let strokeColor = config.glowColor;
