@@ -3,88 +3,33 @@ export const BLAST_RADIUS = 150;
 export const BLAST_FORCE_MULTIPLIER = 0.055;
 export const MERGE_COOLDOWN = 100;
 
+export const IRIDESCENT_LEVEL = 12;
+export const GOLDEN_LEVEL = 9;
+
+const LEVEL_THEMES = {
+  1: { color: '#00e8ff', glow: '#5af0ff' }, // starter (neon cyan accent)
+  2: { color: '#14ff62', glow: '#74ff90' }, // Neon Green
+  3: { color: '#b6ff30', glow: '#e8ff6d' }, // Lime
+  4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
+  5: { color: '#ff3399', glow: '#ff7ec9' }, // Hot Pink
+  6: { color: '#a04bff', glow: '#c995ff' }, // Purple
+  7: { color: '#2f7bff', glow: '#6fb2ff' }, // Electric Blue
+  8: { color: '#29e0ff', glow: '#7df0ff', aura: 0.4 }, // Cyan — subtle aura from here
+  9: { color: '#ffd54e', glow: '#ffec9e', aura: 0.7, golden: true }, // Golden milestone
+  10: { color: '#ff5757', glow: '#ff958a', aura: 0.85 }, // Coral/Red
+  11: { color: '#ff4bd6', glow: '#ff8aee', aura: 1 } // Violet/Magenta
+};
+
 const BASE_CONFIGS = [
-  {
-    level: 1,
-    name: 'Micro Slime',
-    radius: 18,
-    chamfer: 6,
-    color: '#00f0ff',
-    glowColor: '#00f0ff',
-    glowBlur: 15,
-    density: 0.004,
-    restitution: 0.2,
-    friction: 0.35,
-    scoreValue: 10
-  },
-  {
-    level: 2,
-    name: 'Tiny Slime',
-    radius: 24,
-    chamfer: 8,
-    color: '#00ff38',
-    glowColor: '#00ff38',
-    glowBlur: 15,
-    density: 0.005,
-    restitution: 0.18,
-    friction: 0.4,
-    scoreValue: 30
-  },
-  {
-    level: 3,
-    name: 'Small Slime',
-    radius: 31,
-    chamfer: 10,
-    color: '#ccff00',
-    glowColor: '#ccff00',
-    glowBlur: 18,
-    density: 0.006,
-    restitution: 0.15,
-    friction: 0.45,
-    scoreValue: 60
-  },
-  {
-    level: 4,
-    name: 'Medium Slime',
-    radius: 39,
-    chamfer: 12,
-    color: '#ff7700',
-    glowColor: '#ff7700',
-    glowBlur: 20,
-    density: 0.008,
-    restitution: 0.12,
-    friction: 0.5,
-    scoreValue: 120
-  },
-  {
-    level: 5,
-    name: 'Large Slime',
-    radius: 48,
-    chamfer: 14,
-    color: '#ff00a0',
-    glowColor: '#ff00a0',
-    glowBlur: 22,
-    density: 0.01,
-    restitution: 0.1,
-    friction: 0.55,
-    scoreValue: 250
-  },
-  {
-    level: 6,
-    name: 'Mega Slime',
-    radius: 60,
-    chamfer: 16,
-    color: '#bd00ff',
-    glowColor: '#bd00ff',
-    glowBlur: 30,
-    density: 0.014,
-    restitution: 0.08,
-    friction: 0.6,
-    scoreValue: 500
-  }
+  { level: 1, name: 'Micro Slime', radius: 18, chamfer: 6, density: 0.004, restitution: 0.2, friction: 0.35, scoreValue: 10 },
+  { level: 2, name: 'Tiny Slime', radius: 24, chamfer: 8, density: 0.005, restitution: 0.18, friction: 0.4, scoreValue: 30 },
+  { level: 3, name: 'Small Slime', radius: 31, chamfer: 10, density: 0.006, restitution: 0.15, friction: 0.45, scoreValue: 60 },
+  { level: 4, name: 'Medium Slime', radius: 39, chamfer: 12, density: 0.008, restitution: 0.12, friction: 0.5, scoreValue: 120 },
+  { level: 5, name: 'Large Slime', radius: 48, chamfer: 14, density: 0.01, restitution: 0.1, friction: 0.55, scoreValue: 250 },
+  { level: 6, name: 'Mega Slime', radius: 60, chamfer: 16, density: 0.014, restitution: 0.08, friction: 0.6, scoreValue: 500 }
 ];
 
-function hslToHex(h, s, l) {
+export function hslToHex(h, s, l) {
   s /= 100;
   l /= 100;
   const k = n => (n + h / 30) % 12;
@@ -94,9 +39,48 @@ function hslToHex(h, s, l) {
   return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
 }
 
-function makeConfig(level) {
+function buildVisuals(level) {
   const legendary = level >= MAX_SLIME_LEVEL;
+  const iridescent = level >= IRIDESCENT_LEVEL;
+  const theme = LEVEL_THEMES[level];
 
+  let baseHue;
+  let color;
+  let glowColor;
+  if (legendary) {
+    baseHue = 40;
+    color = '#ffffff';
+    glowColor = 'hsl(40, 100%, 64%)';
+  } else if (iridescent) {
+    baseHue = (level * 23) % 360;
+    color = hslToHex(baseHue, 86, 58);
+    glowColor = hslToHex(baseHue, 98, 64);
+  } else if (theme) {
+    color = theme.color;
+    glowColor = theme.glow;
+  } else {
+    baseHue = (level * 137.508) % 360;
+    color = hslToHex(baseHue, 86, 58);
+    glowColor = hslToHex(baseHue, 96, 63);
+  }
+
+  let glowBlur = Math.min(55, 14 + level * 1.9);
+  if (theme && theme.golden) glowBlur += 6;
+  if (iridescent) glowBlur += 4;
+
+  return {
+    color,
+    glowColor,
+    glowBlur,
+    baseHue,
+    legendary,
+    iridescent,
+    golden: !!(theme && theme.golden),
+    aura: (theme && theme.aura) || (iridescent ? 1 : 0)
+  };
+}
+
+function makeConfig(level) {
   let radius;
   if (level <= 6) {
     radius = BASE_CONFIGS[level - 1].radius;
@@ -109,31 +93,25 @@ function makeConfig(level) {
   }
 
   const chamfer = Math.round(Math.min(24, Math.max(10, radius * 0.32)));
-  const hue = (level * 137.508) % 360;
+  const legendary = level >= MAX_SLIME_LEVEL;
 
   return {
     level,
-    name: legendary ? 'Prism Slime' : `Neon Cub-${level}`,
+    name: legendary ? 'Prism Slime' : (LEVEL_THEMES[level] && LEVEL_THEMES[level].golden ? 'Golden Slime' : `Neon Cub-${level}`),
     radius,
     chamfer,
-    color: legendary ? '#ffffff' : hslToHex(hue, 92, 58),
-    glowColor: legendary ? '#ffffff' : hslToHex(hue, 100, 62),
-    glowBlur: Math.min(45, 30 + (level - 6) * 0.6),
     density: Math.min(0.02, 0.014 + (level - 6) * 0.00006),
     restitution: Math.max(0.02, 0.06 - (level - 6) * 0.0002),
     friction: Math.min(0.8, 0.6 + (level - 6) * 0.002),
-    scoreValue: Math.round(500 * Math.pow(1.12, level - 6)),
-    legendary
+    scoreValue: Math.round(500 * Math.pow(1.12, level - 6))
   };
 }
 
-export const SLIME_CONFIGS = [
-  ...BASE_CONFIGS,
-  ...Array.from(
-    { length: MAX_SLIME_LEVEL - BASE_CONFIGS.length },
-    (_, i) => makeConfig(BASE_CONFIGS.length + 1 + i)
-  )
-];
+export const SLIME_CONFIGS = Array.from({ length: MAX_SLIME_LEVEL }, (_, i) => {
+  const level = i + 1;
+  const base = level <= BASE_CONFIGS.length ? { ...BASE_CONFIGS[i] } : makeConfig(level);
+  return { ...base, ...buildVisuals(level) };
+});
 
 export function getSlimeConfig(level) {
   const index = Math.min(Math.max(level, 1), SLIME_CONFIGS.length) - 1;
