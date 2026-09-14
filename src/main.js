@@ -53,6 +53,9 @@ let targetX = null;
 let renderPreviewX = null;
 let dragOriginX = null;
 let dragStartPreviewX = 0;
+let comboCount = 0;
+let lastComboAt = -999999;
+let comboShownUntil = 0;
 
 const BOWL_WIDTH = 480;
 const BOWL_HEIGHT = 300;
@@ -76,6 +79,8 @@ const MAX_SLIME_SPEED = 12;
 const ACCESSORIES = ['horns', 'catEars', 'glasses'];
 const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
+const COMBO_WINDOW = 1500;
+const COMBO_DISPLAY_TIME = 1900;
 
 function randItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -590,8 +595,21 @@ function performMerge(a, b) {
     }
   }, MERGE_COOLDOWN);
 
+  const nowMs = performance.now();
+  if (nowMs - lastComboAt <= COMBO_WINDOW) {
+    comboCount += 1;
+  } else {
+    comboCount = 1;
+  }
+  lastComboAt = nowMs;
+  if (comboCount >= 2) {
+    comboShownUntil = nowMs + COMBO_DISPLAY_TIME;
+  }
+
   const rareBonus = (a.accessory || b.accessory) ? RARE_BONUS : 1;
-  const scoreGain = Math.round(config.scoreValue * rareBonus);
+  const baseGain = Math.round(config.scoreValue * rareBonus);
+  const comboMult = comboCount >= 2 ? comboCount : 1;
+  const scoreGain = Math.round(baseGain * comboMult);
   score += scoreGain;
   maxLevelReached = Math.max(maxLevelReached, level + 1);
   updateUI();
@@ -708,6 +726,7 @@ function triggerGameOver() {
   }
   finalScoreEl.textContent = score.toLocaleString();
   finalMaxLevelEl.textContent = maxLevelReached;
+  comboShownUntil = 0;
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
 }
@@ -719,6 +738,9 @@ function restartGame() {
   slimes = [];
   mergeEffects.length = 0;
   tentacles.length = 0;
+  comboCount = 0;
+  lastComboAt = -999999;
+  comboShownUntil = 0;
   gameOverOverlay.classList.add('hidden');
 
   Composite.clear(engine.world, false);
@@ -851,6 +873,48 @@ function renderCustom() {
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
   drawSlimes(ctx, now);
+  drawComboOverlay(ctx, now);
+}
+
+function drawComboOverlay(ctx, now) {
+  if (isGameOver || comboCount < 2 || now >= comboShownUntil) return;
+
+  const lifeLeft = comboShownUntil - now;
+  const fade = Math.min(1, lifeLeft / 420);
+
+  const pulseA = Math.sin(now * 0.006) * 0.12;
+  const popIn = Math.min(1, (COMBO_DISPLAY_TIME - lifeLeft) / 140);
+  const scale = 0.8 + 0.45 * easeOutBack(popIn) + pulseA;
+
+  const color = comboCount >= 6 ? '#ff4bd6' : comboCount >= 4 ? '#ffd54e' : '#5af0ff';
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, fade);
+  ctx.translate(canvasRect.width / 2, 96 * layoutScale);
+  ctx.scale(scale, scale);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 ${28 * layoutScale}px 'Segoe UI', 'Arial', sans-serif`;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 18 * layoutScale;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`COMBO x${comboCount}`, 0, 0);
+  ctx.shadowBlur = 34 * layoutScale;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = Math.max(0, fade) * 0.55;
+  ctx.fillText(`COMBO x${comboCount}`, 0, 0);
+  ctx.globalAlpha = Math.max(0, fade);
+  ctx.font = `600 ${13 * layoutScale}px 'Segoe UI', 'Arial', sans-serif`;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = color;
+  ctx.fillText(`+${comboCount}× blok points`, 0, 20 * layoutScale);
+  ctx.restore();
+}
+
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
 function drawBackground(ctx, width, height) {
