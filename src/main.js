@@ -415,6 +415,7 @@ function containSlimes() {
     if (slime.body.plugin.mergeCooldown > 0) continue;
     const pos = slime.body.position;
     if (pos.y < bowlYTop + t) continue;
+    if (pos.y > bowlYBottom) continue;
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - slime.config.radius * layoutScale);
     const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
     const over = pos.x >= bowlCenterX ? pos.x - limit : limit - pos.x;
