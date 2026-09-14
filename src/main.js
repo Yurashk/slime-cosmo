@@ -1193,8 +1193,8 @@ function drawSlimes(ctx, now) {
 }
 
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
-  const eyeY = sizeY * 0.05;
-  const eyeSpacing = sizeX * 0.32;
+  const eyeY = -sizeY * 0.05;
+  const eyeSpacing = sizeX * 0.28;
   const eyeR = sizeX * 0.15;
 
   let gx = slime.body.velocity.x;
@@ -1289,8 +1289,8 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
       ctx.fill();
     }
   } else if (acc === 'glasses') {
-    const eyeY = sizeY * 0.05;
-    const eyeSpacing = sizeX * 0.32;
+    const eyeY = -sizeY * 0.05;
+    const eyeSpacing = sizeX * 0.28;
     const gR = sizeX * 0.145;
     for (const s of [-1, 1]) {
       ctx.beginPath();
