@@ -1,6 +1,6 @@
 export const MAX_SLIME_LEVEL = 128;
 export const BLAST_RADIUS = 150;
-export const BLAST_FORCE_MULTIPLIER = 0.055;
+export const BLAST_FORCE_MULTIPLIER = 0.04;
 export const MERGE_COOLDOWN = 100;
 
 export const IRIDESCENT_LEVEL = 12;
@@ -21,12 +21,12 @@ const LEVEL_THEMES = {
 };
 
 const BASE_CONFIGS = [
-  { level: 1, name: 'Micro Slime', radius: 18, chamfer: 6, density: 0.004, restitution: 0.2, friction: 0.35, scoreValue: 10 },
-  { level: 2, name: 'Tiny Slime', radius: 24, chamfer: 8, density: 0.005, restitution: 0.18, friction: 0.4, scoreValue: 30 },
-  { level: 3, name: 'Small Slime', radius: 31, chamfer: 10, density: 0.006, restitution: 0.15, friction: 0.45, scoreValue: 60 },
-  { level: 4, name: 'Medium Slime', radius: 39, chamfer: 12, density: 0.008, restitution: 0.12, friction: 0.5, scoreValue: 120 },
-  { level: 5, name: 'Large Slime', radius: 48, chamfer: 14, density: 0.01, restitution: 0.1, friction: 0.55, scoreValue: 250 },
-  { level: 6, name: 'Mega Slime', radius: 60, chamfer: 16, density: 0.014, restitution: 0.08, friction: 0.6, scoreValue: 500 }
+  { level: 1, name: 'Micro Slime', radius: 18, chamfer: 6, density: 0.004, restitution: 0.32, friction: 0.35, scoreValue: 10 },
+  { level: 2, name: 'Tiny Slime', radius: 24, chamfer: 8, density: 0.005, restitution: 0.3, friction: 0.4, scoreValue: 30 },
+  { level: 3, name: 'Small Slime', radius: 31, chamfer: 10, density: 0.006, restitution: 0.27, friction: 0.45, scoreValue: 60 },
+  { level: 4, name: 'Medium Slime', radius: 39, chamfer: 12, density: 0.008, restitution: 0.24, friction: 0.5, scoreValue: 120 },
+  { level: 5, name: 'Large Slime', radius: 48, chamfer: 14, density: 0.01, restitution: 0.2, friction: 0.55, scoreValue: 250 },
+  { level: 6, name: 'Mega Slime', radius: 60, chamfer: 16, density: 0.014, restitution: 0.16, friction: 0.6, scoreValue: 500 }
 ];
 
 export function hslToHex(h, s, l) {
@@ -101,7 +101,7 @@ function makeConfig(level) {
     radius,
     chamfer,
     density: Math.min(0.02, 0.014 + (level - 6) * 0.00006),
-    restitution: Math.max(0.02, 0.06 - (level - 6) * 0.0002),
+    restitution: Math.max(0.05, 0.16 - (level - 6) * 0.0004),
     friction: Math.min(0.8, 0.6 + (level - 6) * 0.002),
     scoreValue: Math.round(500 * Math.pow(1.12, level - 6))
   };

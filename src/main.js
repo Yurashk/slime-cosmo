@@ -71,7 +71,6 @@ const SLIME_CATEGORY = 0x0002;
 const mergeEffects = [];
 const stars = [];
 const tentacles = [];
-const ESCAPE_MARGIN = 220;
 const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
 const MAX_SLIME_KICK = 3.5;
@@ -188,7 +187,7 @@ function createBowl() {
   const bowlOptions = {
     isStatic: true,
     friction: 0.3,
-    restitution: 0.1,
+    restitution: 0.22,
     collisionFilter: { category: BOWL_CATEGORY, mask: SLIME_CATEGORY | BOWL_CATEGORY }
   };
 
@@ -348,7 +347,7 @@ function createSlime(x, y, config) {
   const side = config.radius * 2 * layoutScale;
   const body = Bodies.rectangle(x, y, side, side, {
     density: config.density,
-    restitution: Math.min(config.restitution, 0.20),
+    restitution: Math.min(config.restitution, 0.38),
     friction: 0.5,
     frictionAir: 0.05,
     frictionStatic: 0.5,
@@ -684,7 +683,7 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
       const lr = slimeConfig.radius;
       const slimeMass = lr * lr * 4 * slimeConfig.density;
 
-      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 50 + 1)) * layoutScale;
+      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 85 + 1)) * layoutScale;
       const cappedKick = Math.min(kick, MAX_SLIME_KICK * layoutScale);
       const force = cappedKick * slimeMass;
       const forceX = (dx / dist) * force;
@@ -708,11 +707,24 @@ function updateHighScoreUI() {
 }
 
 function checkGameOver() {
-  const bottomY = canvasRect.height - 100;
+  const t = wallT();
+  const margin = 30;
   for (const slime of slimes) {
-    if (slime.body.position.y > bottomY + ESCAPE_MARGIN) {
+    if (slime.body.isRemoved) continue;
+    const pos = slime.body.position;
+    const r = slime.config.radius * layoutScale;
+
+    if (pos.y > bowlYBottom + t + 10) {
       triggerGameOver();
       return;
+    }
+
+    if (pos.y > bowlYTop + t) {
+      const limit = bowlSafeHalfWidth(pos.y) + r + margin;
+      if (Math.abs(pos.x - bowlCenterX) > limit) {
+        triggerGameOver();
+        return;
+      }
     }
   }
 }
