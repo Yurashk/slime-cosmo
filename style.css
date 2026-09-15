@@ -184,7 +184,8 @@ body::before {
 .next-slime-hud {
   position: absolute;
   top: calc(12px + env(safe-area-inset-top) + 68px);
-  left: 0;
+  right: calc(12px + env(safe-area-inset-right));
+  left: auto;
   display: flex;
   align-items: center;
   z-index: 5;
@@ -193,14 +194,15 @@ body::before {
 .next-slime-hud.hidden { display: none !important; }
 
 .next-slime-display {
-  width: 28px;
-  height: 28px;
-  border-radius: 25%;
+  width: 20px;
+  height: 20px;
+  border-radius: 22%;
   background: radial-gradient(circle at 30% 30%, var(--neon-cyan), var(--neon-blue));
+  border: 2px solid #ffd54e;
   box-shadow:
-    0 0 8px var(--neon-cyan),
-    0 0 16px var(--neon-cyan),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.3);
+    0 0 8px rgba(255, 213, 78, 0.8),
+    0 0 16px rgba(255, 213, 78, 0.45),
+    inset 0 0 4px rgba(255, 213, 78, 0.6);
 }
 
 .restart-btn {

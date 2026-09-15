@@ -1,6 +1,6 @@
 export const MAX_SLIME_LEVEL = 128;
 export const BLAST_RADIUS = 150;
-export const BLAST_FORCE_MULTIPLIER = 0.03;
+export const BLAST_FORCE_MULTIPLIER = 0.015;
 export const MERGE_COOLDOWN = 100;
 
 export const IRIDESCENT_LEVEL = 12;

@@ -282,15 +282,6 @@ function updatePreviewPosition() {
   previewEl.style.left = clampedX + 'px';
   previewEl.style.transform = 'translateX(-50%)';
 
-  const previewSize = currentPreviewConfig ? currentPreviewConfig.radius * 2 * layoutScale : 40;
-  const gap = 10;
-  const hudWidth = 32;
-  let hudLeft = clampedX + previewSize / 2 + gap;
-  if (hudLeft + hudWidth > canvasRect.width - 6) {
-    hudLeft = clampedX - previewSize / 2 - gap - hudWidth;
-  }
-  nextSlimeHud.style.left = hudLeft + 'px';
-
   const dropZoneLeft = centerX - halfWidth;
   const dropZoneWidth = halfWidth * 2;
   dropZoneIndicator.style.left = dropZoneLeft + 'px';
@@ -321,9 +312,10 @@ function spawnNextSlime() {
   }
   nextSlimeConfig = getRandomLowLevelSlime();
 
-  nextSlimeDisplay.style.borderRadius = '25%';
+  nextSlimeDisplay.style.borderRadius = '22%';
   nextSlimeDisplay.style.background = `radial-gradient(circle at 30% 30%, ${nextSlimeConfig.color}, ${nextSlimeConfig.glowColor})`;
-  nextSlimeDisplay.style.boxShadow = `0 0 12px ${nextSlimeConfig.glowColor}, 0 0 24px ${nextSlimeConfig.glowColor}`;
+  nextSlimeDisplay.style.border = '2px solid #ffd54e';
+  nextSlimeDisplay.style.boxShadow = `0 0 8px rgba(255,213,78,0.8), 0 0 16px rgba(255,213,78,0.45), inset 0 0 4px rgba(255,213,78,0.6)`;
 
   updatePreview();
   updatePreviewPosition();
