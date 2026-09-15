@@ -604,9 +604,8 @@ function performMerge(a, b) {
   const spawnPos = findMergePosition(anchorX, midY, config);
 
   const newSlime = createSlime(spawnPos.x, spawnPos.y, config);
-  newSlime.opacity = 0;
-  newSlime.scaleAnim = 0.3;
-  newSlime.mergeAnim = { elapsed: 0, duration: 300 };
+  newSlime.opacity = 1;
+  newSlime.mergeAnim = { elapsed: 0, duration: 240 };
   newSlime.body.plugin.mergeCooldown = MERGE_COOLDOWN;
   newSlime.mergeAnchor = { x: anchorX, y: midY };
   slimes.push(newSlime);
@@ -841,8 +840,7 @@ function updateSlimesVisual() {
       slime.mergeAnim.elapsed += dt;
       const progress = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      slime.opacity = eased;
-      slime.mergedScale = 0.3 + 0.7 * eased;
+      slime.mergedScale = 1 + 0.22 * Math.pow(1 - eased, 2);
 
       if (slime.mergeAnchor) {
         Body.setPosition(slime.body, slime.mergeAnchor);
@@ -1299,6 +1297,15 @@ function drawSlimes(ctx, now) {
     ctx.shadowColor = glowColor;
     ctx.shadowBlur = glowBlur;
     ctx.fill();
+
+    if (slime.mergeAnim) {
+      const mp = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = opacity * (1 - mp) * 0.45;
+      ctx.shadowBlur = glowBlur * 1.5;
+      ctx.fill();
+      ctx.globalAlpha = opacity;
+    }
 
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 2;
