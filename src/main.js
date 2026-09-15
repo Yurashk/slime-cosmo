@@ -152,29 +152,27 @@ function createStars() {
   }
 }
 
-function createWallSegments(sign, bb, bt, yB, yT, thickness, centerX, options, n = 7) {
+function createWall(sign, bb, bt, yB, yT, thickness, centerX, options) {
   const sx = sign * bb + centerX, sy = yB;
   const ex = sign * bt + centerX, ey = yT;
   const dx = ex - sx, dy = ey - sy;
   const len = Math.hypot(dx, dy);
+  const midX = (sx + ex) / 2, midY = (sy + ey) / 2;
+  const angle = Math.atan2(dy, dx);
   const ux = dx / len, uy = dy / len;
-  let nx = sign, ny = -nx * ux / uy;
-  const nl = Math.hypot(nx, ny);
-  nx /= nl; ny /= nl;
-  const angle = Math.atan2(uy, ux);
-  const segments = [];
-  for (let i = 0; i < n; i++) {
-    const mx = sx + ux * (len * (i + 0.5) / n);
-    const my = sy + uy * (len * (i + 0.5) / n);
-    segments.push(Bodies.rectangle(
-      mx + nx * thickness * 0.5,
-      my + ny * thickness * 0.5,
-      (len / n) * 1.05,
-      thickness,
-      { ...options, angle }
-    ));
+  let nx, ny;
+  if (sign > 0) {
+    nx = -uy; ny = ux;
+  } else {
+    nx = uy; ny = -ux;
   }
-  return segments;
+  return Bodies.rectangle(
+    midX + nx * thickness * 0.5,
+    midY + ny * thickness * 0.5,
+    len,
+    thickness,
+    { ...options, angle }
+  );
 }
 
 function createBowl() {
@@ -192,7 +190,7 @@ function createBowl() {
   const bowlOptions = {
     isStatic: true,
     friction: 0.3,
-    restitution: 0.22,
+    restitution: 0.1,
     collisionFilter: { category: BOWL_CATEGORY, mask: SLIME_CATEGORY | BOWL_CATEGORY }
   };
 
@@ -201,8 +199,8 @@ function createBowl() {
     chamfer: { radius: Math.max(4, (t / 2) * 0.9) }
   });
 
-  bowlLeft = createWallSegments(-1, bb, bt, yB, yT, t, centerX, bowlOptions);
-  bowlRight = createWallSegments(1, bb, bt, yB, yT, t, centerX, bowlOptions);
+  bowlLeft = createWall(-1, bb, bt, yB, yT, t, centerX, bowlOptions);
+  bowlRight = createWall(1, bb, bt, yB, yT, t, centerX, bowlOptions);
 
   bowlCenterX = centerX;
   bowlYTop = yT;
@@ -211,7 +209,7 @@ function createBowl() {
   bowlHalfBottom = bb;
 
   bowlBody = Body.create({
-    parts: [bowlBottom, ...bowlLeft, ...bowlRight],
+    parts: [bowlBottom, bowlLeft, bowlRight],
     isStatic: true,
     frictionAir: 0,
     collisionFilter: { category: BOWL_CATEGORY, mask: SLIME_CATEGORY | BOWL_CATEGORY }
@@ -439,6 +437,8 @@ function containSlimes() {
     if (pos.y < bowlYTop) {
       if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r) {
         slime.flownOut = true;
+      } else if (slime.body.velocity.y < 0) {
+        Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: slime.body.velocity.y * -0.2 });
       }
       continue;
     }
@@ -715,10 +715,13 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
       const force = cappedKick * slimeMass;
       const forceX = (dx / dist) * force;
       const forceY = (dy / dist) * force;
+      const maxForce = 0.04 * layoutScale;
+      const fx = Math.max(-maxForce, Math.min(maxForce, forceX));
+      const fy = Math.max(-maxForce, Math.min(maxForce, forceY));
 
       slime.elastic += cappedKick * 0.006;
 
-      Body.applyForce(slime.body, slime.body.position, { x: forceX, y: forceY });
+      Body.applyForce(slime.body, slime.body.position, { x: fx, y: fy });
     }
   }
 }
@@ -846,15 +849,8 @@ function updateSlimesVisual() {
       const eased = 1 - Math.pow(1 - progress, 3);
       slime.mergedScale = 1 + 0.22 * Math.pow(1 - eased, 2);
 
-      if (slime.mergeAnchor) {
-        Body.setPosition(slime.body, slime.mergeAnchor);
-        Body.setVelocity(slime.body, { x: 0, y: 0 });
-        Body.setAngularVelocity(slime.body, 0);
-      }
-
       if (progress >= 1) {
         slime.mergeAnim = null;
-        slime.mergeAnchor = null;
         slime.opacity = 1;
         slime.mergedScale = 1;
       }
