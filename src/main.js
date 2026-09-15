@@ -24,6 +24,7 @@ const maxLevelEl = document.getElementById('max-level');
 const highScoreEl = document.getElementById('high-score');
 const slimeCountEl = document.getElementById('slime-count');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
+const nextSlimeHud = document.getElementById('next-slime-hud');
 const nextSlimeNameEl = document.getElementById('next-slime-name');
 const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
@@ -282,6 +283,15 @@ function updatePreviewPosition() {
 
   previewEl.style.left = clampedX + 'px';
   previewEl.style.transform = 'translateX(-50%)';
+
+  const previewSize = currentPreviewConfig ? currentPreviewConfig.radius * 2 * layoutScale : 40;
+  const gap = 10;
+  const hudWidth = 60;
+  let hudLeft = clampedX + previewSize / 2 + gap;
+  if (hudLeft + hudWidth > canvasRect.width - 6) {
+    hudLeft = clampedX - previewSize / 2 - gap - hudWidth;
+  }
+  nextSlimeHud.style.left = hudLeft + 'px';
 
   const dropZoneLeft = centerX - halfWidth;
   const dropZoneWidth = halfWidth * 2;
@@ -739,6 +749,7 @@ function triggerGameOver() {
   finalScoreEl.textContent = score.toLocaleString();
   finalMaxLevelEl.textContent = maxLevelReached;
   comboShownUntil = 0;
+  nextSlimeHud.classList.add('hidden');
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
 }
@@ -777,6 +788,7 @@ function restartGame() {
 
   nextSlimeConfig = null;
   spawnNextSlime();
+  nextSlimeHud.classList.remove('hidden');
   updateUI();
   updateHighScoreUI();
 }
