@@ -25,7 +25,6 @@ const highScoreEl = document.getElementById('high-score');
 const slimeCountEl = document.getElementById('slime-count');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
 const nextSlimeHud = document.getElementById('next-slime-hud');
-const nextSlimeNameEl = document.getElementById('next-slime-name');
 const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
@@ -105,7 +104,6 @@ function init() {
   setupEventListeners();
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
-  Events.on(engine, 'afterUpdate', containSlimes);
   spawnNextSlime();
   updatePreview();
   updateHighScoreUI();
@@ -286,7 +284,7 @@ function updatePreviewPosition() {
 
   const previewSize = currentPreviewConfig ? currentPreviewConfig.radius * 2 * layoutScale : 40;
   const gap = 10;
-  const hudWidth = 60;
+  const hudWidth = 32;
   let hudLeft = clampedX + previewSize / 2 + gap;
   if (hudLeft + hudWidth > canvasRect.width - 6) {
     hudLeft = clampedX - previewSize / 2 - gap - hudWidth;
@@ -323,10 +321,9 @@ function spawnNextSlime() {
   }
   nextSlimeConfig = getRandomLowLevelSlime();
 
-  nextSlimeDisplay.style.borderRadius = '22%';
+  nextSlimeDisplay.style.borderRadius = '25%';
   nextSlimeDisplay.style.background = `radial-gradient(circle at 30% 30%, ${nextSlimeConfig.color}, ${nextSlimeConfig.glowColor})`;
-  nextSlimeDisplay.style.boxShadow = `0 0 20px ${nextSlimeConfig.glowColor}, 0 0 40px ${nextSlimeConfig.glowColor}`;
-  nextSlimeNameEl.textContent = nextSlimeConfig.name;
+  nextSlimeDisplay.style.boxShadow = `0 0 12px ${nextSlimeConfig.glowColor}, 0 0 24px ${nextSlimeConfig.glowColor}`;
 
   updatePreview();
   updatePreviewPosition();
@@ -357,7 +354,7 @@ function createSlime(x, y, config) {
   const side = config.radius * 2 * layoutScale;
   const body = Bodies.rectangle(x, y, side, side, {
     density: config.density,
-    restitution: Math.min(config.restitution, 0.38),
+    restitution: Math.min(config.restitution, 0.55),
     friction: 0.5,
     frictionAir: 0.05,
     frictionStatic: 0.5,
@@ -423,28 +420,6 @@ function bowlSafeHalfWidth(y) {
   if (span <= 0) return bowlHalfTop;
   const t = Math.max(0, Math.min(1, (bowlYBottom - y) / span));
   return bowlHalfBottom + t * (bowlHalfTop - bowlHalfBottom);
-}
-
-function containSlimes() {
-  const t = wallT();
-  for (const slime of slimes) {
-    if (slime.body.isRemoved) continue;
-    if (slime.body.plugin.mergeCooldown > 0) continue;
-    const pos = slime.body.position;
-    if (pos.y < bowlYTop + t) continue;
-    if (pos.y > bowlYBottom) continue;
-    const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - slime.config.radius * layoutScale);
-    const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
-    const over = pos.x >= bowlCenterX ? pos.x - limit : limit - pos.x;
-    if (over > 0) {
-      Body.setPosition(slime.body, { x: limit, y: pos.y });
-      const v = slime.body.velocity;
-      const outward = pos.x >= bowlCenterX ? 1 : -1;
-      const inward = -outward;
-      if (v.x * outward > 0) Body.setVelocity(slime.body, { x: v.x * inward * 0.4, y: Math.min(0, v.y) });
-      slime.body.angularVelocity *= 0.3;
-    }
-  }
 }
 
 function handleCosmicAttraction() {
@@ -693,7 +668,7 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
       const lr = slimeConfig.radius;
       const slimeMass = lr * lr * 4 * slimeConfig.density;
 
-      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 85 + 1)) * layoutScale;
+      const kick = (BLAST_FORCE_MULTIPLIER * sourceMass) / (slimeMass * slimeMass * (dist / 140 + 1)) * layoutScale;
       const cappedKick = Math.min(kick, MAX_SLIME_KICK * layoutScale);
       const force = cappedKick * slimeMass;
       const forceX = (dx / dist) * force;
@@ -784,7 +759,6 @@ function restartGame() {
   Events.on(engine, 'collisionStart', handleCollisionStart);
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
-  Events.on(engine, 'afterUpdate', containSlimes);
 
   nextSlimeConfig = null;
   spawnNextSlime();

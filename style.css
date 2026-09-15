@@ -186,47 +186,21 @@ body::before {
   top: calc(12px + env(safe-area-inset-top) + 68px);
   left: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
   z-index: 5;
   pointer-events: none;
-  background: rgba(5,3,17,0.65);
-  padding: 6px 8px;
-  border-radius: 8px;
-  box-shadow: 0 0 12px var(--neon-cyan), 0 0 24px rgba(0,200,255,0.25);
 }
 .next-slime-hud.hidden { display: none !important; }
 
-.next-label {
-  font-size: clamp(8px, 1.3vw, 10px);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
 .next-slime-display {
-  width: 44px;
-  height: 44px;
-  border-radius: 22%;
+  width: 28px;
+  height: 28px;
+  border-radius: 25%;
   background: radial-gradient(circle at 30% 30%, var(--neon-cyan), var(--neon-blue));
   box-shadow:
-    0 0 15px var(--neon-cyan),
-    0 0 30px var(--neon-cyan),
-    inset 0 -4px 12px rgba(0, 0, 0, 0.3);
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-
-.next-name {
-  font-size: clamp(10px, 1.6vw, 12px);
-  font-weight: 500;
-  color: var(--text-primary);
-  text-align: center;
-  white-space: nowrap;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    0 0 8px var(--neon-cyan),
+    0 0 16px var(--neon-cyan),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .restart-btn {
