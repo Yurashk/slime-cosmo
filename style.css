@@ -183,9 +183,10 @@ body::before {
 
 .next-slime-hud {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top) + 68px);
-  right: calc(12px + env(safe-area-inset-right));
-  left: auto;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: calc(12px + env(safe-area-inset-left));
+  top: auto;
+  right: auto;
   display: flex;
   align-items: center;
   z-index: 5;
