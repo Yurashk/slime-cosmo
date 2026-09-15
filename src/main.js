@@ -555,10 +555,11 @@ function aabbOverlaps(x, y, half, body) {
 
 function findMergePosition(x, y, config) {
   const half = config.radius * layoutScale;
+  const walls = [bowlBottom, ...bowlLeft, ...bowlRight];
   let cx = x, cy = y;
   for (let i = 0; i < 90; i++) {
     let free = true;
-    for (const wall of [bowlLeft, bowlRight, bowlBottom]) {
+    for (const wall of walls) {
       if (aabbOverlaps(cx, cy, half, wall)) { free = false; break; }
     }
     if (free) {
