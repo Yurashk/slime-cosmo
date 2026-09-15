@@ -431,7 +431,7 @@ function containSlimes() {
     const pos = slime.body.position;
     const r = slime.config.radius * layoutScale;
 
-    if (pos.y > bowlYBottom + t + 10) {
+    if (pos.y - r > bowlYBottom + t) {
       slime.flownOut = true;
       continue;
     }
@@ -744,9 +744,9 @@ function checkGameOver() {
       continue;
     }
 
-    if (pos.y > bowlYBottom + t + 10) {
-      triggerGameOver();
-      return;
+    if (!slime.flownOut && pos.y - slime.config.radius * layoutScale > bowlYBottom + t) {
+      slime.flownOut = true;
+      continue;
     }
   }
 }
@@ -933,7 +933,7 @@ function drawDropTrail(ctx, now) {
   }
   if (landing < dropY + 4) landing = dropY + 4;
 
-  const dropTo = Math.max(dropY, landing);
+  const dropTo = Math.max(dropY, Math.min(landing, bowlYTop));
 
   ctx.save();
   ctx.globalAlpha = 0.45;
@@ -1089,13 +1089,6 @@ function drawBowl(ctx) {
   bodyGrad.addColorStop(0.55, 'rgba(32, 46, 120, 0.5)');
   bodyGrad.addColorStop(1, 'rgba(10, 14, 48, 0.65)');
   ctx.fillStyle = bodyGrad;
-  ctx.fill();
-
-  trace(cavity);
-  const wellGrad = ctx.createLinearGradient(0, yT, 0, yB);
-  wellGrad.addColorStop(0, 'rgba(120, 190, 255, 0.05)');
-  wellGrad.addColorStop(1, 'rgba(0, 200, 255, 0.12)');
-  ctx.fillStyle = wellGrad;
   ctx.fill();
 
   const now = performance.now();
