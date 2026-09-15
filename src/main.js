@@ -555,7 +555,7 @@ function aabbOverlaps(x, y, half, body) {
 
 function findMergePosition(x, y, config) {
   const half = config.radius * layoutScale + 3;
-  const walls = [bowlBottom, ...bowlLeft, ...bowlRight];
+  const walls = [bowlBottom, bowlLeft, bowlRight];
   let cx = x, cy = y;
   for (let i = 0; i < 160; i++) {
     let free = true;
@@ -611,13 +611,14 @@ function performMerge(a, b) {
   newSlime.opacity = 1;
   newSlime.mergeAnim = { elapsed: 0, duration: 240 };
   newSlime.body.plugin.mergeCooldown = MERGE_COOLDOWN;
-  newSlime.mergeAnchor = { x: spawnPos.x, y: spawnPos.y };
+  newSlime.body.collisionFilter.mask = 0;
   slimes.push(newSlime);
   Composite.add(engine.world, newSlime.body);
 
   setTimeout(() => {
     if (newSlime.body && newSlime.body.plugin) {
       newSlime.body.plugin.mergeCooldown = 0;
+      newSlime.body.collisionFilter.mask = BOWL_CATEGORY | SLIME_CATEGORY;
     }
   }, MERGE_COOLDOWN);
 
