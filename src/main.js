@@ -884,8 +884,61 @@ function renderCustom() {
   drawBowl(ctx);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
+  drawDropTrail(ctx, now);
   drawSlimes(ctx, now);
   drawComboOverlay(ctx, now);
+}
+
+function drawDropTrail(ctx, now) {
+  if (isGameOver || renderPreviewX == null || !currentPreviewConfig) return;
+
+  const centerX = canvasRect.width / 2;
+  const halfWidth = bowlW() / 2 - currentPreviewConfig.radius * layoutScale - 12;
+  const dropX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, renderPreviewX));
+  const dropY = Math.max(50, canvasRect.height * 0.16);
+  const r = currentPreviewConfig.radius * layoutScale;
+
+  let landing = bowlYBottom;
+  for (const slime of slimes) {
+    if (slime.body.isRemoved) continue;
+    const pos = slime.body.position;
+    if (Math.abs(pos.x - dropX) < r + slime.config.radius * layoutScale) {
+      landing = Math.min(landing, pos.y - slime.config.radius * layoutScale);
+    }
+  }
+  if (landing < dropY + 4) landing = dropY + 4;
+
+  const bandW = Math.max(6, r * 2 * 0.9);
+  const x0 = dropX - bandW / 2;
+  const x1 = dropX + bandW / 2;
+  const h = landing - dropY;
+
+  ctx.save();
+  ctx.globalAlpha = 0.10;
+  ctx.fillStyle = currentPreviewConfig.glowColor;
+  ctx.fillRect(x0, dropY, bandW, h);
+
+  ctx.globalAlpha = 0.38;
+  ctx.strokeStyle = currentPreviewConfig.glowColor;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([7, 7]);
+  ctx.lineDashOffset = -(now * 0.02) % 14;
+  ctx.strokeRect(x0, dropY, bandW, h);
+
+  ctx.globalAlpha = 0.28;
+  ctx.setLineDash([3, 9]);
+  ctx.beginPath();
+  ctx.moveTo(dropX, dropY);
+  ctx.lineTo(dropX, landing);
+  ctx.stroke();
+
+  ctx.lineDashOffset = -(now * 0.01) % 12;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(x0 - 8, landing);
+  ctx.lineTo(x1 + 8, landing);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawComboOverlay(ctx, now) {
