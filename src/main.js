@@ -104,6 +104,7 @@ function init() {
   setupEventListeners();
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
+  Events.on(engine, 'afterUpdate', containSlimes);
   spawnNextSlime();
   updatePreview();
   updateHighScoreUI();
@@ -412,6 +413,28 @@ function bowlSafeHalfWidth(y) {
   if (span <= 0) return bowlHalfTop;
   const t = Math.max(0, Math.min(1, (bowlYBottom - y) / span));
   return bowlHalfBottom + t * (bowlHalfTop - bowlHalfBottom);
+}
+
+function containSlimes() {
+  if (isGameOver) return;
+  const t = wallT();
+  for (const slime of slimes) {
+    if (slime.body.isRemoved) continue;
+    if (slime.body.plugin.mergeCooldown > 0) continue;
+    const pos = slime.body.position;
+    if (pos.y < bowlYTop + t) continue;
+    if (pos.y > bowlYBottom + t) continue;
+    const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - slime.config.radius * layoutScale);
+    const over = pos.x >= bowlCenterX ? pos.x - safe : safe - pos.x;
+    if (over > 0 && over < t) {
+      const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
+      Body.setPosition(slime.body, { x: limit, y: pos.y });
+      const v = slime.body.velocity;
+      const outward = pos.x >= bowlCenterX ? 1 : -1;
+      if (v.x * outward > 0) Body.setVelocity(slime.body, { x: v.x * -outward * 0.4, y: Math.min(0, v.y) });
+      slime.body.angularVelocity *= 0.3;
+    }
+  }
 }
 
 function handleCosmicAttraction() {
@@ -751,6 +774,7 @@ function restartGame() {
   Events.on(engine, 'collisionStart', handleCollisionStart);
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
+  Events.on(engine, 'afterUpdate', containSlimes);
 
   nextSlimeConfig = null;
   spawnNextSlime();
@@ -1046,8 +1070,8 @@ function drawBowl(ctx) {
 
   trace(cavity);
   const wellGrad = ctx.createLinearGradient(0, yT, 0, yB);
-  wellGrad.addColorStop(0, 'rgba(120, 190, 255, 0.12)');
-  wellGrad.addColorStop(1, 'rgba(0, 200, 255, 0.28)');
+  wellGrad.addColorStop(0, 'rgba(120, 190, 255, 0.05)');
+  wellGrad.addColorStop(1, 'rgba(0, 200, 255, 0.12)');
   ctx.fillStyle = wellGrad;
   ctx.fill();
 
