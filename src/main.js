@@ -856,32 +856,10 @@ function updateSlimesVisual() {
 
     slime.elastic = Math.max(0, slime.elastic - 0.028 * dt / 16);
 
-    if (slime.config.level <= 3) {
-      const pressure = getStackPressure(slime);
-      slime.elastic = Math.max(slime.elastic, Math.min(0.5, pressure * 0.085));
-    }
-
     const e = slime.elastic;
-    const soft = slime.config.level <= 3 ? 1.5 : 1;
-    slime.visualScaleX = 1 + e * 0.3 * soft;
-    slime.visualScaleY = 1 - e * 0.3 * soft;
+    slime.visualScaleX = 1 + e * 0.3;
+    slime.visualScaleY = 1 - e * 0.3;
   }
-}
-
-function getStackPressure(slime) {
-  const pos = slime.body.position;
-  const r = slime.config.radius * layoutScale;
-  let pressure = 0;
-  for (const other of slimes) {
-    if (other === slime || other.body.isRemoved) continue;
-    const op = other.body.position;
-    const or = other.config.radius * layoutScale;
-    if (Math.abs(op.x - pos.x) > r + or) continue;
-    const overlapTop = other.body.bounds.min.y < pos.y - r;
-    if (!overlapTop) continue;
-    pressure += other.body.mass;
-  }
-  return pressure;
 }
 
 function updateParticles() {
