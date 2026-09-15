@@ -152,24 +152,29 @@ function createStars() {
   }
 }
 
-function createTrapezoidWall(sign, bb, bt, yB, yT, thickness, centerX, options) {
+function createWallSegments(sign, bb, bt, yB, yT, thickness, centerX, options, n = 7) {
   const sx = sign * bb + centerX, sy = yB;
   const ex = sign * bt + centerX, ey = yT;
-  let dx = ex - sx, dy = ey - sy;
+  const dx = ex - sx, dy = ey - sy;
   const len = Math.hypot(dx, dy);
-  dx /= len; dy /= len;
-  const nx = sign > 0 ? -dy : dy;
-  const ny = sign > 0 ? dx : -dx;
-  const verts = [
-    { x: sx + nx * thickness, y: sy + ny * thickness },
-    { x: sx, y: sy },
-    { x: ex, y: ey },
-    { x: ex + nx * thickness, y: ey + ny * thickness }
-  ];
-  let cx = 0, cy = 0;
-  for (const v of verts) { cx += v.x; cy += v.y; }
-  cx /= 4; cy /= 4;
-  return Bodies.fromVertices(cx, cy, [verts], options);
+  const ux = dx / len, uy = dy / len;
+  let nx = sign, ny = -nx * ux / uy;
+  const nl = Math.hypot(nx, ny);
+  nx /= nl; ny /= nl;
+  const angle = Math.atan2(uy, ux);
+  const segments = [];
+  for (let i = 0; i < n; i++) {
+    const mx = sx + ux * (len * (i + 0.5) / n);
+    const my = sy + uy * (len * (i + 0.5) / n);
+    segments.push(Bodies.rectangle(
+      mx + nx * thickness * 0.5,
+      my + ny * thickness * 0.5,
+      (len / n) * 1.05,
+      thickness,
+      { ...options, angle }
+    ));
+  }
+  return segments;
 }
 
 function createBowl() {
@@ -196,8 +201,8 @@ function createBowl() {
     chamfer: { radius: Math.max(4, (t / 2) * 0.9) }
   });
 
-  bowlLeft = createTrapezoidWall(-1, bb, bt, yB, yT, t, centerX, bowlOptions);
-  bowlRight = createTrapezoidWall(1, bb, bt, yB, yT, t, centerX, bowlOptions);
+  bowlLeft = createWallSegments(-1, bb, bt, yB, yT, t, centerX, bowlOptions);
+  bowlRight = createWallSegments(1, bb, bt, yB, yT, t, centerX, bowlOptions);
 
   bowlCenterX = centerX;
   bowlYTop = yT;
@@ -206,7 +211,7 @@ function createBowl() {
   bowlHalfBottom = bb;
 
   bowlBody = Body.create({
-    parts: [bowlBottom, bowlLeft, bowlRight],
+    parts: [bowlBottom, ...bowlLeft, ...bowlRight],
     isStatic: true,
     frictionAir: 0,
     collisionFilter: { category: BOWL_CATEGORY, mask: SLIME_CATEGORY | BOWL_CATEGORY }
@@ -374,6 +379,7 @@ function createSlime(x, y, config) {
     visualScaleX: 1,
     visualScaleY: 1,
     elastic: 0,
+    flownOut: false,
     accessory: Math.random() < ACCESSORY_CHANCE ? randItem(ACCESSORIES) : null
   };
 }
@@ -421,12 +427,26 @@ function containSlimes() {
   for (const slime of slimes) {
     if (slime.body.isRemoved) continue;
     if (slime.body.plugin.mergeCooldown > 0) continue;
+    if (slime.flownOut) continue;
     const pos = slime.body.position;
-    if (pos.y < bowlYTop + t) continue;
-    if (pos.y > bowlYBottom + t) continue;
-    const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - slime.config.radius * layoutScale);
-    const over = pos.x >= bowlCenterX ? pos.x - safe : safe - pos.x;
-    if (over > 0 && over < t) {
+    const r = slime.config.radius * layoutScale;
+
+    if (pos.y < bowlYTop) {
+      if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + 2) {
+        slime.flownOut = true;
+      }
+      continue;
+    }
+    if (pos.y > bowlYBottom + t) {
+      if (pos.y > bowlYBottom + t + 8) {
+        slime.flownOut = true;
+      }
+      continue;
+    }
+
+    const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
+    const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
+    if (over > 0) {
       const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
       Body.setPosition(slime.body, { x: limit, y: pos.y });
       const v = slime.body.velocity;
@@ -708,23 +728,21 @@ function updateHighScoreUI() {
 
 function checkGameOver() {
   const t = wallT();
-  const margin = 30;
   for (const slime of slimes) {
     if (slime.body.isRemoved) continue;
     const pos = slime.body.position;
-    const r = slime.config.radius * layoutScale;
+
+    if (slime.flownOut) {
+      if (pos.y > bowlYTop + t) {
+        triggerGameOver();
+        return;
+      }
+      continue;
+    }
 
     if (pos.y > bowlYBottom + t + 10) {
       triggerGameOver();
       return;
-    }
-
-    if (pos.y > bowlYTop + t) {
-      const limit = bowlSafeHalfWidth(pos.y) + r + margin;
-      if (Math.abs(pos.x - bowlCenterX) > limit) {
-        triggerGameOver();
-        return;
-      }
     }
   }
 }
