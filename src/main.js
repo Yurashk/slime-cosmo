@@ -431,14 +431,13 @@ function containSlimes() {
     const pos = slime.body.position;
     const r = slime.config.radius * layoutScale;
 
-    if (pos.y < bowlYTop) {
-      if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + 2) {
-        slime.flownOut = true;
-      }
+    if (pos.y > bowlYBottom + t + 10) {
+      slime.flownOut = true;
       continue;
     }
-    if (pos.y > bowlYBottom + t) {
-      if (pos.y > bowlYBottom + t + 8) {
+
+    if (pos.y < bowlYTop) {
+      if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r) {
         slime.flownOut = true;
       }
       continue;
@@ -446,6 +445,10 @@ function containSlimes() {
 
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
     const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
+    if (over > t + 1) {
+      slime.flownOut = true;
+      continue;
+    }
     if (over > 0) {
       const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
       Body.setPosition(slime.body, { x: limit, y: pos.y });
