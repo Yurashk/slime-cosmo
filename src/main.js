@@ -908,35 +908,17 @@ function drawDropTrail(ctx, now) {
   }
   if (landing < dropY + 4) landing = dropY + 4;
 
-  const bandW = Math.max(6, r * 2 * 0.9);
-  const x0 = dropX - bandW / 2;
-  const x1 = dropX + bandW / 2;
-  const h = landing - dropY;
+  const dropTo = Math.max(dropY, landing);
 
   ctx.save();
-  ctx.globalAlpha = 0.10;
-  ctx.fillStyle = currentPreviewConfig.glowColor;
-  ctx.fillRect(x0, dropY, bandW, h);
-
-  ctx.globalAlpha = 0.38;
+  ctx.globalAlpha = 0.45;
   ctx.strokeStyle = currentPreviewConfig.glowColor;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([7, 7]);
   ctx.lineDashOffset = -(now * 0.02) % 14;
-  ctx.strokeRect(x0, dropY, bandW, h);
-
-  ctx.globalAlpha = 0.28;
-  ctx.setLineDash([3, 9]);
   ctx.beginPath();
   ctx.moveTo(dropX, dropY);
-  ctx.lineTo(dropX, landing);
-  ctx.stroke();
-
-  ctx.lineDashOffset = -(now * 0.01) % 12;
-  ctx.setLineDash([6, 6]);
-  ctx.beginPath();
-  ctx.moveTo(x0 - 8, landing);
-  ctx.lineTo(x1 + 8, landing);
+  ctx.lineTo(dropX, dropTo);
   ctx.stroke();
   ctx.restore();
 }
