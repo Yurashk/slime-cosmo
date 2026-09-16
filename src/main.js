@@ -5,7 +5,6 @@ import {
   MAX_SLIME_LEVEL,
   BLAST_RADIUS,
   BLAST_FORCE_MULTIPLIER,
-  MERGE_COOLDOWN,
   IRIDESCENT_LEVEL,
   GOLDEN_LEVEL,
   hslToHex
@@ -74,6 +73,8 @@ const tentacles = [];
 const ambientParticles = [];
 const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
+const MERGE_SPAWN_COOLDOWN = 400;
+const MERGE_SPAWN_START_SCALE = 0.6;
 const MAX_SLIME_KICK = 3.5;
 const MAX_SLIME_SPEED = 12;
 const ACCESSORIES = ['horns', 'catEars', 'glasses'];
@@ -381,7 +382,8 @@ function createSlime(x, y, config) {
     flownOut: false,
     accessory: Math.random() < ACCESSORY_CHANCE ? randItem(ACCESSORIES) : null,
     seed: Math.random() * 10,
-    particleTimer: 100 + Math.random() * 300
+    particleTimer: 100 + Math.random() * 300,
+    bodyScale: 1
   };
 }
 
@@ -580,10 +582,12 @@ function performMerge(a, b) {
 
   const newSlime = createSlime(anchorX, midY, config);
   newSlime.opacity = 1;
-  newSlime.mergeAnim = { elapsed: 0, duration: 240 };
-  newSlime.body.plugin.mergeCooldown = MERGE_COOLDOWN;
-  newSlime.body.collisionFilter.mask = 0;
+  newSlime.mergeAnim = { elapsed: 0, duration: 320 };
+  newSlime.body.plugin.mergeCooldown = MERGE_SPAWN_COOLDOWN;
   newSlime.mergeAnchor = { x: anchorX, y: midY };
+  newSlime.bodyScale = MERGE_SPAWN_START_SCALE;
+  newSlime.mergedScale = MERGE_SPAWN_START_SCALE;
+  Body.scale(newSlime.body, MERGE_SPAWN_START_SCALE, MERGE_SPAWN_START_SCALE);
   slimes.push(newSlime);
   Composite.add(engine.world, newSlime.body);
 
@@ -813,8 +817,14 @@ function updateSlimesVisual() {
     if (slime.mergeAnim) {
       slime.mergeAnim.elapsed += dt;
       const progress = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      slime.mergedScale = 1 + 0.22 * Math.pow(1 - eased, 2);
+      const target = MERGE_SPAWN_START_SCALE + (1 - MERGE_SPAWN_START_SCALE) * easeOutBack(progress);
+
+      if (progress < 1 && slime.bodyScale !== target) {
+        const ratio = target / slime.bodyScale;
+        Body.scale(slime.body, ratio, ratio);
+        slime.bodyScale = target;
+      }
+      slime.mergedScale = target;
 
       if (slime.mergeAnchor) {
         Body.setPosition(slime.body, slime.mergeAnchor);
@@ -823,11 +833,14 @@ function updateSlimesVisual() {
       }
 
       if (progress >= 1) {
+        if (slime.bodyScale !== 1) {
+          Body.scale(slime.body, 1 / slime.bodyScale, 1 / slime.bodyScale);
+          slime.bodyScale = 1;
+        }
         slime.mergeAnim = null;
         slime.mergeAnchor = null;
         slime.opacity = 1;
         slime.mergedScale = 1;
-        slime.body.collisionFilter.mask = BOWL_CATEGORY | SLIME_CATEGORY;
       }
     }
 
