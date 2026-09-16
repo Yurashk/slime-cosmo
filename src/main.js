@@ -71,6 +71,7 @@ const SLIME_CATEGORY = 0x0002;
 const mergeEffects = [];
 const stars = [];
 const tentacles = [];
+const ambientParticles = [];
 const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
 const MAX_SLIME_KICK = 3.5;
@@ -351,7 +352,7 @@ function createSlime(x, y, config) {
   const body = Bodies.rectangle(x, y, side, side, {
     density: config.density,
     restitution: Math.min(config.restitution, 0.15),
-    friction: 0.5,
+    friction: config.friction,
     frictionAir: 0.05,
     frictionStatic: 0.5,
     chamfer: { radius: config.chamfer * layoutScale },
@@ -378,7 +379,9 @@ function createSlime(x, y, config) {
     visualScaleY: 1,
     elastic: 0,
     flownOut: false,
-    accessory: Math.random() < ACCESSORY_CHANCE ? randItem(ACCESSORIES) : null
+    accessory: Math.random() < ACCESSORY_CHANCE ? randItem(ACCESSORIES) : null,
+    seed: Math.random() * 10,
+    particleTimer: 100 + Math.random() * 300
   };
 }
 
@@ -742,6 +745,7 @@ function restartGame() {
   slimes = [];
   mergeEffects.length = 0;
   tentacles.length = 0;
+  ambientParticles.length = 0;
   comboCount = 0;
   lastComboAt = -999999;
   comboShownUntil = 0;
@@ -855,6 +859,7 @@ function updateParticles() {
 function gameLoop() {
   if (!isGameOver) {
     updateParticles();
+    updateAmbientParticles();
     updateMergeEffects();
     updateSlimesVisual();
     checkGameOver();
@@ -879,6 +884,7 @@ function renderCustom() {
   drawTentacles(ctx, now);
   drawDropTrail(ctx, now);
   drawSlimes(ctx, now);
+  drawAmbientParticles(ctx, now);
   drawComboOverlay(ctx, now);
 }
 
@@ -1320,11 +1326,294 @@ function drawSlimes(ctx, now) {
     ctx.lineCap = 'round';
     ctx.stroke();
 
+    drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY);
     drawSlimeFace(ctx, slime, now, sizeX, sizeY);
     drawAccessory(ctx, slime, sizeX, sizeY, glowColor);
 
     ctx.restore();
   }
+}
+
+function drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY) {
+  const style = config.visualStyle;
+  if (!style || style === 'solid') return;
+  const hw = sizeX / 2;
+  const hh = sizeY / 2;
+  const opacity = slime.opacity !== undefined ? slime.opacity : 1;
+
+  switch (style) {
+    case 'electric': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      ctx.lineCap = 'round';
+      const flick = Math.sin(now * 0.05) + Math.sin(now * 0.079 + 1.7);
+      const alpha = 0.4 + 0.32 * Math.max(0, Math.min(1, flick * 0.5 + 0.5));
+      ctx.strokeStyle = `rgba(200, 235, 255, ${alpha})`;
+      ctx.shadowColor = config.glowColor;
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = Math.max(1.2, hw * 0.08);
+      for (let b = 0; b < 3; b++) {
+        const t0 = (now * 0.002 + slime.seed + b * 0.42) % 1;
+        const x0 = -hw + t0 * hw * 2;
+        ctx.beginPath();
+        ctx.moveTo(x0, -hh);
+        let x = x0;
+        for (let i = 1; i <= 4; i++) {
+          const t = i / 4;
+          const y = -hh + t * hh * 2;
+          x = x0 + Math.sin(t * 7 + now * 0.02 + slime.seed * 3 + b * 2.1) * hw * 0.18;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+      break;
+    }
+    case 'plasma': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      const pulse = 0.75 + 0.25 * Math.sin(now * 0.006);
+      const g = ctx.createRadialGradient(0, 0, r * pulse * 0.42, 0, 0, r);
+      g.addColorStop(0, 'rgba(190, 245, 255, 0.9)');
+      g.addColorStop(0.55, 'rgba(41, 224, 255, 0.4)');
+      g.addColorStop(1, 'rgba(41, 224, 255, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-hw, -hh, sizeX, sizeY);
+      ctx.restore();
+      break;
+    }
+    case 'golden': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      const bx = ((now * 0.3) % (hw * 2)) - hw;
+      const band = ctx.createLinearGradient(bx - 14, 0, bx + 14, 0);
+      band.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      band.addColorStop(0.5, 'rgba(255, 255, 255, 0.38)');
+      band.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(-hw, -hh, sizeX, sizeY);
+      for (let i = 0; i < 3; i++) {
+        const a = now * 0.003 + i * 2.1;
+        const sx = Math.cos(a) * hw * 0.35;
+        const sy = Math.sin(a) * hh * 0.35;
+        ctx.fillStyle = 'rgba(255, 244, 200, 0.5)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(1, hw * 0.05), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      break;
+    }
+    case 'magma': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      const pulse = 0.8 + 0.2 * Math.sin(now * 0.005);
+      const g = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r);
+      g.addColorStop(0, `rgba(255, 214, 130, ${0.75 * pulse})`);
+      g.addColorStop(0.5, `rgba(255, 87, 87, ${0.4 * pulse})`);
+      g.addColorStop(1, 'rgba(120, 20, 10, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-hw, -hh, sizeX, sizeY);
+      ctx.strokeStyle = 'rgba(70, 10, 4, 0.55)';
+      ctx.lineWidth = Math.max(1.5, hw * 0.06);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const cy = -hh + hh * 2 * (0.28 + 0.2 * i);
+        ctx.beginPath();
+        ctx.moveTo(-hw * 0.6, cy);
+        ctx.lineTo(-hw * 0.2, cy + hh * 0.12);
+        ctx.lineTo(hw * 0.15, cy - hh * 0.1);
+        ctx.lineTo(hw * 0.6, cy + hh * 0.1);
+        ctx.stroke();
+      }
+      ctx.restore();
+      break;
+    }
+    case 'nebula': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      const hue = config.baseHue !== undefined ? config.baseHue : 220;
+      const ch = (hue + 70) % 360;
+      const sh = (hue + 310) % 360;
+      for (let i = 0; i < 2; i++) {
+        const bx = Math.sin(now * 0.0003 + i * 2.3) * hw * 0.28;
+        const by = Math.cos(now * 0.00024 + i * 1.7) * hh * 0.26;
+        const g = ctx.createRadialGradient(bx, by, 0, bx, by, r * 0.75);
+        g.addColorStop(0, `hsla(${ch}, 90%, 70%, 0.5)`);
+        g.addColorStop(1, `hsla(${ch}, 90%, 60%, 0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(-hw, -hh, sizeX, sizeY);
+        const g2 = ctx.createRadialGradient(-bx, -by, 0, -bx, -by, r * 0.6);
+        g2.addColorStop(0, `hsla(${sh}, 90%, 70%, 0.35)`);
+        g2.addColorStop(1, `hsla(${sh}, 90%, 60%, 0)`);
+        ctx.fillStyle = g2;
+        ctx.fillRect(-hw, -hh, sizeX, sizeY);
+      }
+      ctx.restore();
+      break;
+    }
+    case 'iridescent': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      for (let i = 0; i < 4; i++) {
+        const a = now * 0.002 + i * 1.57 + slime.seed;
+        const hue = (config.baseHue + now * 0.06 + i * 90) % 360;
+        ctx.fillStyle = `hsla(${hue}, 95%, 75%, 0.4)`;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * hw * 0.4, Math.sin(a * 1.3) * hh * 0.4, Math.max(1, hw * 0.05), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      break;
+    }
+    case 'singularity': {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = opacity;
+      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
+      core.addColorStop(0, 'rgba(6, 10, 26, 0.96)');
+      core.addColorStop(0.85, 'rgba(70, 100, 230, 0.3)');
+      core.addColorStop(1, 'rgba(70, 100, 230, 0)');
+      ctx.fillStyle = core;
+      ctx.fillRect(-hw, -hh, sizeX, sizeY);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = opacity * (0.55 + 0.25 * Math.sin(now * 0.008));
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = Math.max(1.5, hw * 0.07);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      break;
+    }
+  }
+}
+
+const AMBIENT_PARTICLE_KINDS = {
+  sparks: { kind: 'streak', vy: 0.7, vx: 0.5, life: 26, decay: 0.03, sizeMul: 1.1, color: '#fff6c9' },
+  golden_dust: { kind: 'star', vy: 0.16, vx: 0.1, life: 70, decay: 0.011, sizeMul: 0.9, color: '#ffd54e' },
+  ember: { kind: 'glow', vy: 0.42, vx: 0.18, life: 52, decay: 0.016, sizeMul: 1.0, color: '#ff8a5c' },
+  cosmic_stars: { kind: 'dot', vy: 0.1, vx: 0.1, life: 80, decay: 0.01, sizeMul: 0.8, color: '#c995ff' },
+  prism_shimmer: { kind: 'dot', vy: 0.5, vx: 0.3, life: 40, decay: 0.02, sizeMul: 0.9, color: '#bffcff' },
+  hyper_sparkles: { kind: 'cross', vy: 0.9, vx: 0.6, life: 22, decay: 0.036, sizeMul: 1.2, color: '#9fd8ff' }
+};
+
+function spawnAmbientParticle(slime) {
+  const cfg = slime.config;
+  const data = AMBIENT_PARTICLE_KINDS[cfg.particleType];
+  if (!data) return;
+  const r = cfg.radius * layoutScale;
+  const pos = slime.body.position;
+  const a = Math.random() * Math.PI * 2;
+  const ar = r * (0.25 + Math.random() * 0.55);
+  const size = Math.max(1.5, (0.5 + Math.random() * 0.7) * r * data.sizeMul * 0.07);
+  ambientParticles.push({
+    x: pos.x + Math.cos(a) * ar,
+    y: pos.y + Math.sin(a) * ar,
+    vx: (Math.random() - 0.5) * data.vx * 2,
+    vy: -data.vy * (0.6 + Math.random() * 0.8),
+    life: data.life,
+    maxLife: data.life,
+    size,
+    color: data.color,
+    kind: data.kind,
+    wx: Math.random() * 10,
+    wy: Math.random() * 10
+  });
+}
+
+function updateAmbientParticles() {
+  const dt = 16.67;
+  for (const slime of slimes) {
+    if (slime.body.isRemoved) continue;
+    const cfg = slime.config;
+    if (!cfg.particleType) continue;
+    if (slime.opacity < 0.3 || slime.mergeAnim) continue;
+    const interval = (cfg.visualStyle === 'singularity' || cfg.visualStyle === 'iridescent') ? 220 : 340;
+    slime.particleTimer -= dt;
+    if (slime.particleTimer <= 0) {
+      slime.particleTimer = interval * (0.6 + Math.random() * 0.8);
+      if (ambientParticles.length < 160) spawnAmbientParticle(slime);
+    }
+  }
+  for (let i = ambientParticles.length - 1; i >= 0; i--) {
+    const p = ambientParticles[i];
+    p.life -= p.decay;
+    if (p.life <= 0) { ambientParticles.splice(i, 1); continue; }
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.985;
+    p.vy *= 0.985;
+    if (p.kind === 'glow' || p.kind === 'star') p.vy += 0.0008;
+  }
+}
+
+function drawAmbientParticles(ctx, now) {
+  if (ambientParticles.length === 0) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const p of ambientParticles) {
+    const fade = Math.max(0, Math.min(1, p.life / p.maxLife));
+    let alpha = fade;
+    if (p.kind === 'glow' || p.kind === 'dot') {
+      alpha *= 0.55 + 0.45 * Math.sin(now * 0.02 + p.wx);
+    }
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = p.color;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+
+    switch (p.kind) {
+      case 'streak': {
+        const len = 3 + p.size * 2.5;
+        ctx.lineWidth = Math.max(1, p.size * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(p.x + p.vy * len, p.y + p.vx * len);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        break;
+      }
+      case 'cross': {
+        const s = p.size * (0.6 + 0.5 * Math.sin(now * 0.05 + p.wx));
+        ctx.lineWidth = Math.max(1, p.size * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(p.x - s, p.y);
+        ctx.lineTo(p.x + s, p.y);
+        ctx.moveTo(p.x, p.y - s);
+        ctx.lineTo(p.x, p.y + s);
+        ctx.stroke();
+        break;
+      }
+      case 'star': {
+        const s = p.size * (0.7 + 0.5 * Math.sin(now * 0.03 + p.wx));
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+          const ang = i * Math.PI / 2 + now * 0.004;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(ang) * s, p.y + Math.sin(ang) * s);
+        }
+        ctx.stroke();
+        break;
+      }
+      default: {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
 }
 
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {

@@ -13,11 +13,11 @@ const LEVEL_THEMES = {
   4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
   5: { color: '#ff3399', glow: '#ff7ec9' }, // Hot Pink
   6: { color: '#a04bff', glow: '#c995ff' }, // Purple
-  7: { color: '#2f7bff', glow: '#6fb2ff' }, // Electric Blue
-  8: { color: '#29e0ff', glow: '#7df0ff', aura: 0.4 }, // Cyan — subtle aura from here
-  9: { color: '#ffd54e', glow: '#ffec9e', aura: 0.7, golden: true }, // Golden milestone
-  10: { color: '#ff5757', glow: '#ff958a', aura: 0.85 }, // Coral/Red
-  11: { color: '#ff4bd6', glow: '#ff8aee', aura: 1 } // Violet/Magenta
+  7: { color: '#2f7bff', glow: '#6fb2ff', visualStyle: 'electric', particles: 'sparks' },
+  8: { color: '#29e0ff', glow: '#7df0ff', aura: 0.4, visualStyle: 'plasma', innerCore: true },
+  9: { color: '#ffd54e', glow: '#ffec9e', aura: 0.7, golden: true, visualStyle: 'golden', particles: 'golden_dust' },
+  10: { color: '#ff5757', glow: '#ff958a', aura: 0.85, visualStyle: 'magma', particles: 'ember' },
+  11: { color: '#ff4bd6', glow: '#ff8aee', aura: 1, visualStyle: 'nebula', particles: 'cosmic_stars' } 
 };
 
 const BASE_CONFIGS = [
@@ -47,6 +47,7 @@ function buildVisuals(level) {
   let baseHue;
   let color;
   let glowColor;
+
   if (legendary) {
     baseHue = 40;
     color = '#ffffff';
@@ -68,6 +69,23 @@ function buildVisuals(level) {
   if (theme && theme.golden) glowBlur += 6;
   if (iridescent) glowBlur += 4;
 
+  // Визуальные эффекты для усложнения внешнего вида 7+ уровней
+  let visualStyle = (theme && theme.visualStyle) || 'solid';
+  let particleType = (theme && theme.particles) || null;
+  let innerCore = (theme && theme.innerCore) || false;
+
+  if (iridescent) {
+    visualStyle = 'iridescent';
+    particleType = 'prism_shimmer';
+    innerCore = true;
+  }
+
+  if (legendary) {
+    visualStyle = 'singularity';
+    particleType = 'hyper_sparkles';
+    innerCore = true;
+  }
+
   return {
     color,
     glowColor,
@@ -76,7 +94,10 @@ function buildVisuals(level) {
     legendary,
     iridescent,
     golden: !!(theme && theme.golden),
-    aura: (theme && theme.aura) || (iridescent ? 1 : 0)
+    aura: (theme && theme.aura) || (iridescent ? 1 : 0),
+    visualStyle,
+    particleType,
+    innerCore
   };
 }
 
@@ -95,14 +116,19 @@ function makeConfig(level) {
   const chamfer = Math.round(Math.min(24, Math.max(10, radius * 0.32)));
   const legendary = level >= MAX_SLIME_LEVEL;
 
+  // Физика тяжести после 6 уровня: масса и трение растут умеренно, отскок гасится
+  const density = Math.min(0.03, 0.015 + (level - 6) * 0.0003);
+  const restitution = Math.max(0.01, 0.07 - (level - 6) * 0.005);
+  const friction = Math.min(0.85, 0.62 + (level - 6) * 0.004);
+
   return {
     level,
     name: legendary ? 'Prism Slime' : (LEVEL_THEMES[level] && LEVEL_THEMES[level].golden ? 'Golden Slime' : `Neon Cub-${level}`),
     radius,
     chamfer,
-    density: Math.min(0.02, 0.014 + (level - 6) * 0.00006),
-    restitution: 0.08,
-    friction: Math.min(0.8, 0.6 + (level - 6) * 0.002),
+    density,
+    restitution,
+    friction,
     scoreValue: Math.round(500 * Math.pow(1.12, level - 6))
   };
 }
