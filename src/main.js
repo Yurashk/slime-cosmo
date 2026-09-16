@@ -548,36 +548,6 @@ function handleLandingSquish(pair) {
   if (bSlime) bSlime.elastic = Math.max(bSlime.elastic, squash);
 }
 
-function aabbOverlaps(x, y, half, body) {
-  const b = body.bounds;
-  return x + half > b.min.x && x - half < b.max.x && y + half > b.min.y && y - half < b.max.y;
-}
-
-function findMergePosition(x, y, config) {
-  const half = config.radius * layoutScale + 3;
-  const walls = [bowlBottom, bowlLeft, bowlRight];
-  let cx = x, cy = y;
-  for (let i = 0; i < 160; i++) {
-    let free = true;
-    for (const wall of walls) {
-      if (aabbOverlaps(cx, cy, half, wall)) { free = false; break; }
-    }
-    if (free) {
-      for (const other of slimes) {
-        if (other.body.isRemoved) continue;
-        if (aabbOverlaps(cx, cy, half, other.body)) { free = false; break; }
-      }
-    }
-    if (free) return { x: cx, y: cy };
-    cy -= 3;
-  }
-  return { x, y: y - radiusToWorld(config) * 0.6 };
-}
-
-function radiusToWorld(config) {
-  return config.radius * layoutScale;
-}
-
 function performMerge(a, b) {
   if (isGameOver) return;
   if (a.body.plugin.mergeCooldown > 0 || b.body.plugin.mergeCooldown > 0) return;
@@ -605,22 +575,14 @@ function performMerge(a, b) {
 
   createMergeEffect(anchorX, midY, config);
 
-  const spawnPos = findMergePosition(anchorX, midY, config);
-
-  const newSlime = createSlime(spawnPos.x, spawnPos.y, config);
+  const newSlime = createSlime(anchorX, midY, config);
   newSlime.opacity = 1;
   newSlime.mergeAnim = { elapsed: 0, duration: 240 };
   newSlime.body.plugin.mergeCooldown = MERGE_COOLDOWN;
   newSlime.body.collisionFilter.mask = 0;
+  newSlime.mergeAnchor = { x: anchorX, y: midY };
   slimes.push(newSlime);
   Composite.add(engine.world, newSlime.body);
-
-  setTimeout(() => {
-    if (newSlime.body && newSlime.body.plugin) {
-      newSlime.body.plugin.mergeCooldown = 0;
-      newSlime.body.collisionFilter.mask = BOWL_CATEGORY | SLIME_CATEGORY;
-    }
-  }, MERGE_COOLDOWN);
 
   const nowMs = performance.now();
   if (nowMs - lastComboAt <= COMBO_WINDOW) {
@@ -641,7 +603,7 @@ function performMerge(a, b) {
   maxLevelReached = Math.max(maxLevelReached, level + 1);
   updateUI();
 
-  applyBlastWave(spawnPos.x, spawnPos.y, level + 1);
+  applyBlastWave(anchorX, midY, level + 1);
 }
 
 function handleCollisionStart(event) {
@@ -850,10 +812,18 @@ function updateSlimesVisual() {
       const eased = 1 - Math.pow(1 - progress, 3);
       slime.mergedScale = 1 + 0.22 * Math.pow(1 - eased, 2);
 
+      if (slime.mergeAnchor) {
+        Body.setPosition(slime.body, slime.mergeAnchor);
+        Body.setVelocity(slime.body, { x: 0, y: 0 });
+        Body.setAngularVelocity(slime.body, 0);
+      }
+
       if (progress >= 1) {
         slime.mergeAnim = null;
+        slime.mergeAnchor = null;
         slime.opacity = 1;
         slime.mergedScale = 1;
+        slime.body.collisionFilter.mask = BOWL_CATEGORY | SLIME_CATEGORY;
       }
     }
 
