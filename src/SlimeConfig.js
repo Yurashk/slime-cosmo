@@ -21,12 +21,12 @@ const LEVEL_THEMES = {
 };
 
 const BASE_CONFIGS = [
-  { level: 1, name: 'Micro Slime', radius: 18, chamfer: 6, density: 0.003, restitution: 0.1, friction: 0.25, scoreValue: 10 },
-  { level: 2, name: 'Tiny Slime', radius: 24, chamfer: 8, density: 0.004, restitution: 0.1, friction: 0.3, scoreValue: 30 },
-  { level: 3, name: 'Small Slime', radius: 31, chamfer: 10, density: 0.005, restitution: 0.1, friction: 0.35, scoreValue: 60 },
-  { level: 4, name: 'Medium Slime', radius: 39, chamfer: 12, density: 0.006, restitution: 0.1, friction: 0.4, scoreValue: 120 },
-  { level: 5, name: 'Large Slime', radius: 48, chamfer: 14, density: 0.01, restitution: 0.08, friction: 0.55, scoreValue: 250 },
-  { level: 6, name: 'Mega Slime', radius: 60, chamfer: 16, density: 0.014, restitution: 0.08, friction: 0.6, scoreValue: 500 }
+  { level: 1, name: 'Micro Slime', radius: 18.9, chamfer: 6, density: 0.003, restitution: 0.1, friction: 0.25, scoreValue: 10 },
+  { level: 2, name: 'Tiny Slime', radius: 25.2, chamfer: 8, density: 0.004, restitution: 0.1, friction: 0.3, scoreValue: 30 },
+  { level: 3, name: 'Small Slime', radius: 32.55, chamfer: 10, density: 0.005, restitution: 0.1, friction: 0.35, scoreValue: 60 },
+  { level: 4, name: 'Medium Slime', radius: 40.95, chamfer: 12, density: 0.006, restitution: 0.1, friction: 0.4, scoreValue: 120 },
+  { level: 5, name: 'Large Slime', radius: 50.4, chamfer: 14, density: 0.01, restitution: 0.08, friction: 0.55, scoreValue: 250 },
+  { level: 6, name: 'Mega Slime', radius: 63, chamfer: 16, density: 0.014, restitution: 0.08, friction: 0.6, scoreValue: 500 }
 ];
 
 export function hslToHex(h, s, l) {
@@ -85,7 +85,7 @@ function makeConfig(level) {
   if (level <= 6) {
     radius = BASE_CONFIGS[level - 1].radius;
   } else {
-    radius = Math.min(86, Math.round(60 * Math.pow(1.045, level - 6)));
+    radius = Math.min(90, Math.round(63 * Math.pow(1.045, level - 6)));
   }
 
   if (level % 10 === 0) {
