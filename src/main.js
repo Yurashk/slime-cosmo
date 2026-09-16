@@ -350,7 +350,7 @@ function createSlime(x, y, config) {
   const side = config.radius * 2 * layoutScale;
   const body = Bodies.rectangle(x, y, side, side, {
     density: config.density,
-    restitution: Math.min(config.restitution, 0.55),
+    restitution: Math.min(config.restitution, 0.15),
     friction: 0.5,
     frictionAir: 0.05,
     frictionStatic: 0.5,
@@ -829,9 +829,8 @@ function updateSlimesVisual() {
 
     slime.elastic = Math.max(0, slime.elastic - 0.028 * dt / 16);
 
-    const e = slime.elastic;
-    slime.visualScaleX = 1 + e * 0.3;
-    slime.visualScaleY = 1 - e * 0.3;
+    slime.visualScaleX = 1;
+    slime.visualScaleY = 1;
   }
 }
 
