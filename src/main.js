@@ -582,7 +582,7 @@ function performMerge(a, b) {
 
   const newSlime = createSlime(anchorX, midY, config);
   newSlime.opacity = 1;
-  newSlime.mergeAnim = { elapsed: 0, duration: 320 };
+  newSlime.mergeAnim = { elapsed: 0, duration: 150 };
   newSlime.body.plugin.mergeCooldown = MERGE_SPAWN_COOLDOWN;
   newSlime.mergeAnchor = { x: anchorX, y: midY };
   newSlime.bodyScale = MERGE_SPAWN_START_SCALE;
@@ -817,11 +817,14 @@ function updateSlimesVisual() {
     if (slime.mergeAnim) {
       slime.mergeAnim.elapsed += dt;
       const progress = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
-      const target = MERGE_SPAWN_START_SCALE + (1 - MERGE_SPAWN_START_SCALE) * easeOutBack(progress);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const target = MERGE_SPAWN_START_SCALE + (1 - MERGE_SPAWN_START_SCALE) * eased;
 
-      if (progress < 1 && slime.bodyScale !== target) {
+      if (progress < 1) {
         const ratio = target / slime.bodyScale;
-        Body.scale(slime.body, ratio, ratio);
+        if (Math.abs(ratio - 1) > 1e-4) {
+          Body.scale(slime.body, ratio, ratio);
+        }
         slime.bodyScale = target;
       }
       slime.mergedScale = target;
@@ -1236,7 +1239,7 @@ function drawSlimes(ctx, now) {
 
     const sizeX = r * 2 * slime.visualScaleX * scale;
     const sizeY = r * 2 * slime.visualScaleY * scale;
-    const chamfer = config.chamfer * layoutScale;
+    const chamfer = config.chamfer * layoutScale * scale;
 
     let glowColor = config.glowColor;
     let strokeColor = config.glowColor;
