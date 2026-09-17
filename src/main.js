@@ -100,6 +100,8 @@ const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
 const COMBO_WINDOW = 1500;
 const COMBO_DISPLAY_TIME = 1900;
+const DROP_EDGE_INSET = 6;
+const BOWL_EDGE_TOLERANCE = 6;
 
 function randItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -237,6 +239,16 @@ function drawPanelEyes(g, r, dirX, dirY) {
   g.restore();
 }
 
+const panelSlimeCache = new Map();
+function getPanelSlime(level) {
+  let slime = panelSlimeCache.get(level);
+  if (!slime) {
+    slime = { body: { angle: 0 }, seed: 1.7 + level * 2.3, mergeAnim: null, opacity: 1 };
+    panelSlimeCache.set(level, slime);
+  }
+  return slime;
+}
+
 function drawPanelSlime(g, slot, target, now) {
   const cfg = getSlimeConfig(slot.level);
   const r = slot.r;
@@ -270,22 +282,9 @@ function drawPanelSlime(g, slot, target, now) {
   g.shadowBlur = 7 + (cfg.glowBlur || 14) * 0.25;
 
   if (cfg.isPlanet && cfg.palette) {
-    const p = cfg.palette;
-    const grad = g.createRadialGradient(-r * 0.35, -r * 0.35, 0, 0, 0, r);
-    grad.addColorStop(0, p.light);
-    grad.addColorStop(0.5, p.base);
-    grad.addColorStop(1, p.dark);
-    g.fillStyle = grad;
-    g.beginPath();
-    g.arc(0, 0, r, 0, Math.PI * 2);
-    g.fill();
-    if (cfg.ring) {
-      g.strokeStyle = 'rgba(255, 240, 200, 0.75)';
-      g.lineWidth = Math.max(1.5, r * 0.14);
-      g.beginPath();
-      g.ellipse(0, 0, r * 1.35, r * 0.5, -0.4, 0, Math.PI * 2);
-      g.stroke();
-    }
+    const planet = getPanelSlime(slot.level);
+    planet.body.angle = Math.sin(now * 0.0006 + slot.level) * 0.18;
+    drawPlanetBody(g, planet, cfg, r, now, 1, revealAlpha, cfg.glowColor, 8 + r * 0.45);
   } else {
     const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
     const grad = g.createLinearGradient(0, -r, 0, r);
@@ -651,20 +650,27 @@ function handleKeyDown(e) {
   }
 }
 
+function clampDropX(desiredX) {
+  const centerX = canvasRect.width / 2;
+  const r = currentPreviewConfig ? currentPreviewConfig.radius * layoutScale : 0;
+  const halfWidth = Math.max(0, bowlW() / 2 - r * 0.5 - DROP_EDGE_INSET);
+  if (desiredX == null) return centerX;
+  return Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, desiredX));
+}
+
 function updatePreviewPosition() {
   const centerX = canvasRect.width / 2;
-  const halfWidth = bowlW() / 2 - 35;
   const desiredX = targetX != null ? targetX : centerX;
-  const clampedX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, desiredX));
+  const clampedX = clampDropX(desiredX);
   renderPreviewX = clampedX;
 
   previewEl.style.left = clampedX + 'px';
   previewEl.style.transform = 'translateX(-50%)';
 
-  const dropZoneLeft = centerX - halfWidth;
-  const dropZoneWidth = halfWidth * 2;
-  dropZoneIndicator.style.left = dropZoneLeft + 'px';
-  dropZoneIndicator.style.width = dropZoneWidth + 'px';
+  const r = currentPreviewConfig ? currentPreviewConfig.radius * layoutScale : 0;
+  const halfWidth = Math.max(0, bowlW() / 2 - r * 0.5 - DROP_EDGE_INSET);
+  dropZoneIndicator.style.left = (centerX - halfWidth) + 'px';
+  dropZoneIndicator.style.width = (halfWidth * 2) + 'px';
 }
 
 function stylePreviewElement(el, config, size, glow) {
@@ -722,9 +728,7 @@ function dropSlime() {
   lastDropTime = now;
 
   const centerX = canvasRect.width / 2;
-  const halfWidth = bowlW() / 2 - currentPreviewConfig.radius * layoutScale - 12;
-  const baseX = renderPreviewX != null ? renderPreviewX : centerX;
-  const dropX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, baseX));
+  const dropX = clampDropX(renderPreviewX != null ? renderPreviewX : centerX);
   const dropY = Math.max(50, canvasRect.height * 0.16);
 
   const slime = createSlime(dropX, dropY, currentPreviewConfig);
@@ -835,7 +839,7 @@ function containSlimes() {
     }
 
     if (pos.y < bowlYTop) {
-      if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r) {
+      if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r + BOWL_EDGE_TOLERANCE) {
         slime.flownOut = true;
       } else if (slime.body.velocity.y < 0) {
         Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: slime.body.velocity.y * -0.2 });
@@ -845,7 +849,7 @@ function containSlimes() {
 
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
     const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
-    if (over > t + 1) {
+    if (over > t + BOWL_EDGE_TOLERANCE) {
       slime.flownOut = true;
       continue;
     }
@@ -1318,9 +1322,7 @@ function renderCustom() {
 function drawDropTrail(ctx, now) {
   if (isGameOver || renderPreviewX == null || !currentPreviewConfig) return;
 
-  const centerX = canvasRect.width / 2;
-  const halfWidth = bowlW() / 2 - currentPreviewConfig.radius * layoutScale - 12;
-  const dropX = Math.max(centerX - halfWidth, Math.min(centerX + halfWidth, renderPreviewX));
+  const dropX = renderPreviewX;
   const dropY = Math.max(50, canvasRect.height * 0.16);
   const r = currentPreviewConfig.radius * layoutScale;
 
