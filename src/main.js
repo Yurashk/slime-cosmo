@@ -25,6 +25,11 @@ const highScoreEl = document.getElementById('high-score');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
 const nextSlimeHud = document.getElementById('next-slime-hud');
 const collectionLabel = document.getElementById('collection-label');
+const collectionCanvas = document.getElementById('collection-canvas');
+const collectionCtx = collectionCanvas ? collectionCanvas.getContext('2d') : null;
+const unlockPopup = document.getElementById('unlock-popup');
+const unlockOrb = document.getElementById('unlock-orb');
+const unlockName = document.getElementById('unlock-name');
 const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
@@ -56,6 +61,13 @@ let dragStartPreviewX = 0;
 let comboCount = 0;
 let lastComboAt = -999999;
 let comboShownUntil = 0;
+let collectionCanvasRect = null;
+let collectionLayoutKey = -1;
+let collectionLayout = [];
+let unlockFly = null;
+let slotReveal = null;
+const COLLECTION_GAP = 6;
+const COLLECTION_ARC = 0.24;
 
 const BOWL_WIDTH = 480;
 const BOWL_HEIGHT = 300;
@@ -88,6 +100,287 @@ const COMBO_DISPLAY_TIME = 1900;
 
 function randItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function getUnlockedLevels() {
+  const arr = [];
+  for (let i = 1; i <= maxLevelReached; i++) arr.push(i);
+  return arr;
+}
+
+function updateCollectionRect() {
+  if (!collectionCanvas) return;
+  const rect = collectionCanvas.getBoundingClientRect();
+  if (!rect || rect.width < 2 || rect.height < 2) return;
+  collectionCanvasRect = rect;
+}
+
+function computeCollectionLayout() {
+  if (!collectionCanvasRect) return [];
+  const W = collectionCanvasRect.width;
+  const H = collectionCanvasRect.height;
+  if (H < 2) return [];
+  const levels = getUnlockedLevels();
+  const rad = lv => getSlimeConfig(lv).radius;
+
+  const sorted = levels.slice().sort((a, b) => b - a);
+  const center = sorted[0];
+  const left = [];
+  const right = [];
+  let goLeft = false;
+  for (let i = 1; i < sorted.length; i++) {
+    if (goLeft) left.push(sorted[i]); else right.push(sorted[i]);
+    goLeft = !goLeft;
+  }
+
+  const gap = COLLECTION_GAP;
+  const leftXs = [];
+  let cursor = gap;
+  for (const lv of left) {
+    leftXs.push({ lv, x0: cursor + rad(lv) });
+    cursor += rad(lv) * 2 + gap;
+  }
+  const rightXs = [];
+  cursor = gap;
+  for (const lv of right) {
+    rightXs.push({ lv, x0: cursor + rad(lv) });
+    cursor += rad(lv) * 2 + gap;
+  }
+
+  const combined = leftXs.slice().reverse();
+  combined.push({ lv: center, x0: 0 });
+  for (const s of rightXs) combined.push(s);
+
+  let x = 0;
+  const placed = [];
+  for (const s of combined) {
+    placed.push({ lv: s.lv, x: x + rad(s.lv) });
+    x += rad(s.lv) * 2 + gap;
+  }
+  const total = x + gap;
+
+  const maxRad = rad(center);
+  const fitW = total > W - 12 ? (W - 12) / total : 1;
+  const targetMax = Math.min(28, H * 0.42);
+  const fitH = targetMax / maxRad;
+  const fit = Math.min(fitW, fitH, 1);
+
+  const centerX = W / 2;
+  const baseY = H * 0.78;
+  const amp = H * COLLECTION_ARC;
+  const slots = [];
+  for (const p of placed) {
+    const sx = centerX + (p.x - total / 2) * fit;
+    const f = Math.abs(sx - centerX) / Math.max(1, W / 2);
+    const y = baseY - amp * (1 - f * f);
+    slots.push({ level: p.lv, x: sx, y, r: rad(p.lv) * fit, fit });
+  }
+  return slots;
+}
+
+function collectionEyeTarget() {
+  if (canvasRect) {
+    if (!isGameOver && renderPreviewX != null) {
+      return {
+        x: canvasRect.left + renderPreviewX,
+        y: canvasRect.top + Math.max(50, canvasRect.height * 0.16)
+      };
+    }
+    return { x: canvasRect.left + canvasRect.width / 2, y: canvasRect.top + 30 };
+  }
+  return { x: (window.innerWidth || 0) / 2, y: 30 };
+}
+
+function drawPanelEyes(g, r, dirX, dirY) {
+  const eyeY = -r * 0.04;
+  const eyeSpacing = r * 0.5;
+  const eyeR = Math.max(1.4, r * 0.15);
+  g.save();
+  g.shadowBlur = 0;
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    const ex = s * eyeSpacing * 0.5 + dirX * eyeSpacing * 0.12;
+    const ey = eyeY + dirY * eyeSpacing * 0.12;
+    g.beginPath();
+    g.arc(ex, ey, eyeR, 0, Math.PI * 2);
+    g.fillStyle = '#ffffff';
+    g.shadowColor = 'rgba(255, 255, 255, 0.85)';
+    g.shadowBlur = 4;
+    g.fill();
+    g.shadowBlur = 0;
+    g.lineWidth = Math.max(0.8, eyeR * 0.12);
+    g.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+    g.stroke();
+    const px = ex + dirX * eyeR * 0.4;
+    const py = ey + dirY * eyeR * 0.4;
+    g.beginPath();
+    g.arc(px, py, eyeR * 0.55, 0, Math.PI * 2);
+    g.fillStyle = '#21242e';
+    g.fill();
+    g.beginPath();
+    g.arc(px + eyeR * 0.18, py - eyeR * 0.18, eyeR * 0.17, 0, Math.PI * 2);
+    g.fillStyle = '#ffffff';
+    g.fill();
+  }
+  g.restore();
+}
+
+function drawPanelSlime(g, slot, target, now) {
+  const cfg = getSlimeConfig(slot.level);
+  const r = slot.r;
+  const bob = Math.sin(now * 0.0021 + slot.level * 1.7) * 1.4;
+  const y = slot.y + bob;
+
+  let revealAlpha = 1;
+  let revealScale = 1;
+  if (slotReveal && slotReveal.level === slot.level) {
+    const t = Math.min(1, (now - slotReveal.start) / 620);
+    revealScale = 1 + 1.1 * (1 - easeOutBack(t));
+    revealAlpha = Math.min(1, t * 4);
+    if (t >= 1) slotReveal = null;
+  }
+
+  let dirX = 0;
+  let dirY = -1;
+  if (target && collectionCanvasRect) {
+    const dx = target.x - (collectionCanvasRect.left + slot.x);
+    const dy = target.y - (collectionCanvasRect.top + y);
+    const dl = Math.hypot(dx, dy) || 1;
+    dirX = dx / dl;
+    dirY = dy / dl;
+  }
+
+  g.save();
+  g.translate(slot.x, y);
+  g.scale(revealScale, revealScale);
+  g.globalAlpha = revealAlpha;
+  g.shadowColor = cfg.glowColor;
+  g.shadowBlur = 7 + (cfg.glowBlur || 14) * 0.25;
+
+  if (cfg.isPlanet && cfg.palette) {
+    const p = cfg.palette;
+    const grad = g.createRadialGradient(-r * 0.35, -r * 0.35, 0, 0, 0, r);
+    grad.addColorStop(0, p.light);
+    grad.addColorStop(0.5, p.base);
+    grad.addColorStop(1, p.dark);
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    g.fill();
+    if (cfg.ring) {
+      g.strokeStyle = 'rgba(255, 240, 200, 0.75)';
+      g.lineWidth = Math.max(1.5, r * 0.14);
+      g.beginPath();
+      g.ellipse(0, 0, r * 1.35, r * 0.5, -0.4, 0, Math.PI * 2);
+      g.stroke();
+    }
+  } else {
+    const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
+    const grad = g.createLinearGradient(0, -r, 0, r);
+    grad.addColorStop(0, lightenColor(cfg.color, 55));
+    grad.addColorStop(0.45, cfg.color);
+    grad.addColorStop(1, darkenColor(cfg.color, 25));
+    g.fillStyle = grad;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(-r, -r, r * 2, r * 2, chamfer);
+    else g.rect(-r, -r, r * 2, r * 2);
+    g.fill();
+    g.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    g.lineWidth = 1;
+    g.shadowBlur = 0;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(-r + 1.5, -r + 1.5, r * 2 - 3, r * 2 - 3, Math.max(1, chamfer - 1));
+    else g.rect(-r + 1.5, -r + 1.5, r * 2 - 3, r * 2 - 3);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(-r * 0.45, -r * 0.42);
+    g.lineTo(r * 0.1, -r * 0.55);
+    g.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    g.lineWidth = 1.4;
+    g.stroke();
+  }
+
+  drawPanelEyes(g, r, dirX, dirY);
+  g.restore();
+}
+
+function updateCollectionBar() {
+  if (!collectionCanvas || !collectionCtx) return;
+  updateCollectionRect();
+  if (!collectionCanvasRect || collectionCanvasRect.width < 2 || collectionCanvasRect.height < 2) return;
+  const cssW = collectionCanvasRect.width;
+  const cssH = collectionCanvasRect.height;
+  const dprNow = window.devicePixelRatio || 1;
+  const pw = Math.round(cssW * dprNow);
+  const ph = Math.round(cssH * dprNow);
+  if (collectionCanvas.width !== pw || collectionCanvas.height !== ph) {
+    collectionCanvas.width = pw;
+    collectionCanvas.height = ph;
+    collectionCtx.setTransform(dprNow, 0, 0, dprNow, 0, 0);
+    collectionLayoutKey = -1;
+  }
+  if (collectionLayoutKey !== maxLevelReached) {
+    collectionLayout = computeCollectionLayout();
+    collectionLayoutKey = maxLevelReached;
+  }
+  const g = collectionCtx;
+  const now = performance.now();
+  g.clearRect(0, 0, cssW, cssH);
+  const target = collectionEyeTarget();
+  for (const slot of collectionLayout) {
+    drawPanelSlime(g, slot, target, now);
+  }
+}
+
+function triggerUnlock(level) {
+  if (!unlockPopup || !unlockOrb) return;
+  const cfg = getSlimeConfig(level);
+  stylePreviewElement(unlockOrb, cfg, 64, true);
+  unlockOrb.style.borderRadius = '50%';
+  if (unlockName) unlockName.textContent = cfg.name;
+  const cx = canvasRect ? canvasRect.left + canvasRect.width / 2 : Math.max(0, (window.innerWidth || 0) / 2);
+  const cy = canvasRect ? canvasRect.top + canvasRect.height * 0.42 : 120;
+  unlockPopup.style.transform = `translate(${cx}px, ${cy}px)`;
+  unlockPopup.classList.remove('hidden');
+  void unlockPopup.offsetWidth;
+  unlockPopup.classList.add('show');
+  unlockFly = { level, config: cfg, phase: 'show', t0: performance.now() };
+}
+
+function updateUnlockFly() {
+  if (!unlockFly) return;
+  if (!unlockPopup) { unlockFly = null; return; }
+  if (!collectionCanvasRect) updateCollectionRect();
+  if (!collectionCanvasRect) return;
+  const f = unlockFly;
+  const now = performance.now();
+  if (f.phase === 'show') {
+    if (now - f.t0 >= 950) {
+      f.phase = 'fly';
+      f.t0 = now;
+      let slot = null;
+      for (const s of collectionLayout) if (s.level === f.level) { slot = s; break; }
+      const r = collectionCanvasRect;
+      f.toX = slot ? r.left + slot.x : r.left + r.width / 2;
+      f.toY = slot ? r.top + slot.y : r.top + r.height * 0.8;
+      const pop = unlockPopup.getBoundingClientRect();
+      f.fromX = pop.left + pop.width / 2;
+      f.fromY = pop.top + pop.height / 2;
+    }
+    return;
+  }
+  const t = Math.min(1, (now - f.t0) / 520);
+  const e = 1 - Math.pow(1 - t, 3);
+  const x = f.fromX + (f.toX - f.fromX) * e;
+  const y = f.fromY + (f.toY - f.fromY) * e;
+  unlockPopup.style.transform = `translate(${x}px, ${y}px) scale(${1 - 0.4 * e})`;
+  if (t >= 1) {
+    unlockPopup.classList.remove('show');
+    unlockPopup.classList.add('hidden');
+    slotReveal = { level: f.level, start: now };
+    unlockFly = null;
+  }
 }
 
 function init() {
@@ -140,6 +433,7 @@ function updateCanvasRect() {
   if (engine && Math.abs(canvasRect.width - lastBowlWidth) > 1) {
     rebuildBowl();
   }
+  updateCollectionRect();
   lastBowlWidth = canvasRect.width;
 }
 
@@ -674,8 +968,11 @@ function performMerge(a, b) {
   const comboMult = comboCount >= 2 ? comboCount : 1;
   const scoreGain = Math.round(baseGain * comboMult);
   score += scoreGain;
-  maxLevelReached = Math.max(maxLevelReached, level + 1);
+  const newLevel = level + 1;
+  const isNewUnlock = newLevel > maxLevelReached;
+  maxLevelReached = Math.max(maxLevelReached, newLevel);
   updateUI();
+  if (isNewUnlock) triggerUnlock(newLevel);
 
   applyBlastWave(anchorX, midY, level + 1);
 }
@@ -824,6 +1121,13 @@ function restartGame() {
   comboCount = 0;
   lastComboAt = -999999;
   comboShownUntil = 0;
+  if (unlockPopup) {
+    unlockPopup.classList.remove('show');
+    unlockPopup.classList.add('hidden');
+  }
+  unlockFly = null;
+  slotReveal = null;
+  collectionLayoutKey = -1;
   gameOverOverlay.classList.add('hidden');
 
   Composite.clear(engine.world, false);
@@ -951,7 +1255,8 @@ function gameLoop() {
     updateSlimesVisual();
     checkGameOver();
   }
-
+  updateUnlockFly();
+  updateCollectionBar();
   renderCustom();
   requestAnimationFrame(gameLoop);
 }
