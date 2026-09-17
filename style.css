@@ -68,6 +68,7 @@ body::before {
 }
 
 .game-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -471,14 +472,15 @@ body::before {
 }
 
 .collection-bar {
-  flex: none;
-  width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
-  height: clamp(64px, 10vh, 96px);
-  padding: 6px 14px 10px;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: min(76vw, 430px);
+  height: clamp(58px, 9vh, 86px);
+  padding: 4px 12px 6px;
   z-index: 4;
+  pointer-events: none;
 }
 
 #collection-canvas {
@@ -562,8 +564,8 @@ body::before {
 
 @media (max-height: 480px) {
   .collection-bar {
-    height: 52px;
-    padding: 2px 14px 4px;
+    height: 46px;
+    padding: 2px 10px 2px;
   }
   .unlock-orb {
     width: 44px;

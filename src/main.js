@@ -102,9 +102,16 @@ function randItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function isSpecialLevel(level) {
+  const cfg = getSlimeConfig(level);
+  return !!(cfg.isPlanet || cfg.legendary || cfg.iridescent || cfg.golden);
+}
+
 function getUnlockedLevels() {
   const arr = [];
-  for (let i = 1; i <= maxLevelReached; i++) arr.push(i);
+  for (let i = 1; i <= maxLevelReached; i++) {
+    if (isSpecialLevel(i)) arr.push(i);
+  }
   return arr;
 }
 
@@ -121,6 +128,7 @@ function computeCollectionLayout() {
   const H = collectionCanvasRect.height;
   if (H < 2) return [];
   const levels = getUnlockedLevels();
+  if (levels.length === 0) return [];
   const rad = lv => getSlimeConfig(lv).radius;
 
   const sorted = levels.slice().sort((a, b) => b - a);
@@ -307,11 +315,12 @@ function drawPanelSlime(g, slot, target, now) {
 
 function updateCollectionBar() {
   if (!collectionCanvas || !collectionCtx) return;
-  updateCollectionRect();
   if (!collectionCanvasRect || collectionCanvasRect.width < 2 || collectionCanvasRect.height < 2) return;
   const cssW = collectionCanvasRect.width;
   const cssH = collectionCanvasRect.height;
   const dprNow = window.devicePixelRatio || 1;
+  const g = collectionCtx;
+  const now = performance.now();
   const pw = Math.round(cssW * dprNow);
   const ph = Math.round(cssH * dprNow);
   if (collectionCanvas.width !== pw || collectionCanvas.height !== ph) {
@@ -324,9 +333,8 @@ function updateCollectionBar() {
     collectionLayout = computeCollectionLayout();
     collectionLayoutKey = maxLevelReached;
   }
-  const g = collectionCtx;
-  const now = performance.now();
   g.clearRect(0, 0, cssW, cssH);
+  if (collectionLayout.length === 0) return;
   const target = collectionEyeTarget();
   for (const slot of collectionLayout) {
     drawPanelSlime(g, slot, target, now);
@@ -972,7 +980,7 @@ function performMerge(a, b) {
   const isNewUnlock = newLevel > maxLevelReached;
   maxLevelReached = Math.max(maxLevelReached, newLevel);
   updateUI();
-  if (isNewUnlock) triggerUnlock(newLevel);
+  if (isNewUnlock && isSpecialLevel(newLevel)) triggerUnlock(newLevel);
 
   applyBlastWave(anchorX, midY, level + 1);
 }
