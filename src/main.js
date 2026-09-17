@@ -82,10 +82,13 @@ const SLIME_CATEGORY = 0x0002;
 
 const mergeEffects = [];
 const stars = [];
+let starLayer = null;
+const sparkleStars = [];
 const nebulas = [];
 const cosmicDust = [];
 const tentacles = [];
 const ambientParticles = [];
+const lowPower = typeof navigator !== 'undefined' && (navigator.hardwareConcurrency || 0) > 0 && navigator.hardwareConcurrency <= 4;
 const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
 const MERGE_SPAWN_COOLDOWN = 400;
@@ -429,7 +432,7 @@ function updateCanvasRect() {
     return;
   }
   canvasRect = rect;
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, lowPower ? 1.5 : 2);
   layoutScale = Math.max(0.58, Math.min(1, canvasRect.width / 640));
   canvas.width = canvasRect.width * dpr;
   canvas.height = canvasRect.height * dpr;
@@ -455,9 +458,10 @@ function rebuildBowl() {
 
 function createStars() {
   stars.length = 0;
-  const count = 45 + Math.floor(Math.random() * 15);
+  sparkleStars.length = 0;
+  const count = (lowPower ? 22 : 45) + Math.floor(Math.random() * (lowPower ? 8 : 15));
   for (let i = 0; i < count; i++) {
-    stars.push({
+    const star = {
       x: Math.random() * canvasRect.width,
       y: Math.random() * canvasRect.height,
       radius: 0.5 + Math.random() * 0.75,
@@ -465,7 +469,29 @@ function createStars() {
       twinkleSpeed: 0.5 + Math.random() * 2,
       twinklePhase: Math.random() * Math.PI * 2,
       color: Math.random() < 0.7 ? '#ffffff' : '#00f0ff'
-    });
+    };
+    stars.push(star);
+    if (i % 6 === 0) sparkleStars.push(star);
+  }
+
+  const w = canvasRect.width;
+  const h = canvasRect.height;
+  starLayer = document.createElement('canvas');
+  starLayer.width = Math.max(1, Math.round(w * dpr));
+  starLayer.height = Math.max(1, Math.round(h * dpr));
+  const sg = starLayer.getContext('2d');
+  sg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const star of stars) {
+    if (sparkleStars.includes(star)) continue;
+    sg.save();
+    sg.beginPath();
+    sg.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+    sg.fillStyle = star.color;
+    sg.globalAlpha = star.baseAlpha * 0.8;
+    sg.shadowColor = star.color;
+    sg.shadowBlur = 6 + star.radius * 3;
+    sg.fill();
+    sg.restore();
   }
 
   nebulas.length = 0;
@@ -1428,13 +1454,21 @@ function drawDust(ctx, now) {
 }
 
 function drawStars(ctx, now) {
-  for (const star of stars) {
-    const twinkle = 0.6 + 0.4 * Math.sin(now * 0.001 * star.twinkleSpeed + star.twinklePhase);
+  const w = canvasRect.width;
+  const h = canvasRect.height;
+  if (starLayer) {
+    ctx.save();
+    ctx.globalAlpha = 0.88 + 0.12 * Math.sin(now * 0.0011);
+    ctx.drawImage(starLayer, 0, 0, w, h);
+    ctx.restore();
+  }
+  for (const star of sparkleStars) {
+    const twinkle = 0.5 + 0.5 * Math.sin(now * 0.001 * star.twinkleSpeed + star.twinklePhase);
     ctx.save();
     ctx.beginPath();
     ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
     ctx.fillStyle = star.color;
-    ctx.globalAlpha = star.baseAlpha * twinkle;
+    ctx.globalAlpha = star.baseAlpha * (0.5 + 0.5 * twinkle);
     ctx.shadowColor = star.color;
     ctx.shadowBlur = 6 + star.radius * 3;
     ctx.fill();
@@ -2255,7 +2289,7 @@ function updateAmbientParticles() {
     slime.particleTimer -= dt;
     if (slime.particleTimer <= 0) {
       slime.particleTimer = interval * (0.6 + Math.random() * 0.8);
-      if (ambientParticles.length < 160) spawnAmbientParticle(slime);
+      if (ambientParticles.length < (lowPower ? 80 : 120)) spawnAmbientParticle(slime);
     }
   }
   for (let i = ambientParticles.length - 1; i >= 0; i--) {
@@ -2284,7 +2318,7 @@ function drawAmbientParticles(ctx, now) {
     ctx.strokeStyle = p.color;
     ctx.fillStyle = p.color;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = p.size >= 2.2 ? 8 : 0;
 
     switch (p.kind) {
       case 'streak': {
