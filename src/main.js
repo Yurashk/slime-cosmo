@@ -364,6 +364,7 @@ function updatePreview() {
 }
 
 function getRandomLowLevelSlime() {
+  if (Math.random() < 0.15) return SLIME_CONFIGS[2];
   return SLIME_CONFIGS[Math.floor(Math.random() * 2)];
 }
 
