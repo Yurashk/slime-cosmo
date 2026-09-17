@@ -11,13 +11,44 @@ const LEVEL_THEMES = {
   2: { color: '#14ff62', glow: '#74ff90' }, // Neon Green
   3: { color: '#b6ff30', glow: '#e8ff6d' }, // Lime
   4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
-  5: { color: '#ff3399', glow: '#ff7ec9' }, // Hot Pink
-  6: { color: '#a04bff', glow: '#c995ff' }, // Purple
-  7: { color: '#2f7bff', glow: '#6fb2ff', visualStyle: 'electric', particles: 'sparks' },
-  8: { color: '#29e0ff', glow: '#7df0ff', aura: 0.4, visualStyle: 'plasma', innerCore: true },
-  9: { color: '#ffd54e', glow: '#ffec9e', aura: 0.7, golden: true, visualStyle: 'golden', particles: 'golden_dust' },
-  10: { color: '#ff5757', glow: '#ff958a', aura: 0.85, visualStyle: 'magma', particles: 'ember' },
-  11: { color: '#ff4bd6', glow: '#ff8aee', aura: 1, visualStyle: 'nebula', particles: 'cosmic_stars' } 
+  5: { color: '#ff3399', glow: '#ff7ec9' } // Hot Pink
+};
+
+export const COLLECTIONS = {
+  solarSystem: {
+    id: 'solar-system',
+    name: 'Solar System',
+    from: 6,
+    to: 14,
+    levels: {
+      6: 'mercury',
+      7: 'venus',
+      8: 'earth',
+      9: 'mars',
+      10: 'jupiter',
+      11: 'saturn',
+      12: 'uranus',
+      13: 'neptune',
+      14: 'sun'
+    }
+  }
+};
+
+const PLANETS = {
+  mercury: { name: 'Mercury', base: '#8A8F98', dark: '#4f545b', light: '#d3d8df', rim: '#6ef4ff', glow: '#bcd4ff', surface: 'craters', aura: 0.2, glowBlur: 40 },
+  venus: { name: 'Venus', base: '#E8B85A', dark: '#8a5c22', light: '#ffefa8', rim: '#ffe08a', glow: '#ffd97a', surface: 'clouds', aura: 0.4, glowBlur: 44 },
+  earth: { name: 'Earth', base: '#3D9BE9', dark: '#174c8c', light: '#a2daff', rim: '#8ef5ff', glow: '#7fc8ff', surface: 'continents', aura: 0.45, glowBlur: 46 },
+  mars: { name: 'Mars', base: '#D95B45', dark: '#6f2a1e', light: '#ff9f7e', rim: '#ffb59a', glow: '#ff9d7a', surface: 'rocky', aura: 0.5, glowBlur: 46 },
+  jupiter: { name: 'Jupiter', base: '#D8A36A', dark: '#64432a', light: '#ffe4b8', rim: '#ffcf8a', glow: '#ffc97e', surface: 'bands', aura: 0.6, glowBlur: 50 },
+  saturn: { name: 'Saturn', base: '#D6B875', dark: '#77603a', light: '#ffefc4', rim: '#ffe9a8', glow: '#ffe2a0', surface: 'bands', ring: true, aura: 0.5, glowBlur: 48 },
+  uranus: { name: 'Uranus', base: '#76D9E8', dark: '#2b7d93', light: '#c9f8ff', rim: '#9fefff', glow: '#9feaff', surface: 'smooth', ring: true, aura: 0.45, glowBlur: 46 },
+  neptune: { name: 'Neptune', base: '#356BD6', dark: '#14295e', light: '#7fb0ff', rim: '#6fb6ff', glow: '#7fb6ff', surface: 'storm', aura: 0.7, glowBlur: 52 },
+  sun: { name: 'Sun', base: '#FFC83D', dark: '#c5761b', light: '#fff3a6', rim: '#fff7cc', glow: '#ffb347', surface: 'corona', aura: 1, glowBlur: 60, particles: 'solar_flare' }
+};
+
+const PLANET_BANDS = {
+  jupiter: ['#e8c291', '#c7874c', '#a5633e', '#e2bc8e', '#b27147', '#d8a36a'],
+  saturn: ['#e8d7a0', '#cbb67a', '#e2ce93', '#bfa76a', '#d6c088']
 };
 
 const BASE_CONFIGS = [
@@ -41,14 +72,21 @@ export function hslToHex(h, s, l) {
 
 function buildVisuals(level) {
   const legendary = level >= MAX_SLIME_LEVEL;
-  const iridescent = level >= IRIDESCENT_LEVEL;
+  const planetKey = (level >= COLLECTIONS.solarSystem.from && level <= COLLECTIONS.solarSystem.to)
+    ? COLLECTIONS.solarSystem.levels[level]
+    : null;
+  const planet = planetKey ? PLANETS[planetKey] : null;
+  const iridescent = !planet && level >= IRIDESCENT_LEVEL;
   const theme = LEVEL_THEMES[level];
 
   let baseHue;
   let color;
   let glowColor;
 
-  if (legendary) {
+  if (planet) {
+    color = planet.base;
+    glowColor = planet.glow;
+  } else if (legendary) {
     baseHue = 40;
     color = '#ffffff';
     glowColor = 'hsl(40, 100%, 64%)';
@@ -65,26 +103,13 @@ function buildVisuals(level) {
     glowColor = hslToHex(baseHue, 96, 63);
   }
 
-  let glowBlur = Math.min(55, 14 + level * 1.9);
-  if (theme && theme.golden) glowBlur += 6;
-  if (iridescent) glowBlur += 4;
+  let glowBlur = planet
+    ? planet.glowBlur
+    : Math.min(55, 14 + level * 1.9) + (theme && theme.golden ? 6 : 0) + (iridescent ? 4 : 0);
 
-  // Визуальные эффекты для усложнения внешнего вида 7+ уровней
-  let visualStyle = (theme && theme.visualStyle) || 'solid';
-  let particleType = (theme && theme.particles) || null;
-  let innerCore = (theme && theme.innerCore) || false;
-
-  if (iridescent) {
-    visualStyle = 'iridescent';
-    particleType = 'prism_shimmer';
-    innerCore = true;
-  }
-
-  if (legendary) {
-    visualStyle = 'singularity';
-    particleType = 'hyper_sparkles';
-    innerCore = true;
-  }
+  let visualStyle = planet ? 'planet' : (theme && theme.visualStyle) || (legendary ? 'singularity' : iridescent ? 'iridescent' : 'solid');
+  let particleType = planet ? (planet.particles || null) : (theme && theme.particles) || (legendary ? 'hyper_sparkles' : iridescent ? 'prism_shimmer' : null);
+  let innerCore = planet ? true : !!(theme && (theme.innerCore)) || legendary || iridescent;
 
   return {
     color,
@@ -94,10 +119,17 @@ function buildVisuals(level) {
     legendary,
     iridescent,
     golden: !!(theme && theme.golden),
-    aura: (theme && theme.aura) || (iridescent ? 1 : 0),
+    aura: planet ? (planet.aura || 0) : (theme && theme.aura) || (iridescent ? 1 : 0),
     visualStyle,
     particleType,
-    innerCore
+    innerCore,
+    collection: planet ? 'solarSystem' : null,
+    planet: planetKey,
+    isPlanet: !!planet,
+    surface: planet ? planet.surface : null,
+    ring: planet ? !!planet.ring : false,
+    palette: planet ? planet : null,
+    ...(planet ? { name: planet.name } : {})
   };
 }
 
@@ -146,4 +178,11 @@ export function getSlimeConfig(level) {
 
 export function getRandomSlimeConfig() {
   return SLIME_CONFIGS[Math.floor(Math.random() * SLIME_CONFIGS.length)];
+}
+
+export function getCollectionName(level) {
+  for (const collection of Object.values(COLLECTIONS)) {
+    if (level >= collection.from && level <= collection.to) return collection.name;
+  }
+  return null;
 }

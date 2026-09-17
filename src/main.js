@@ -7,6 +7,7 @@ import {
   BLAST_FORCE_MULTIPLIER,
   IRIDESCENT_LEVEL,
   GOLDEN_LEVEL,
+  getCollectionName,
   hslToHex
 } from './SlimeConfig.js';
 
@@ -24,6 +25,8 @@ const highScoreEl = document.getElementById('high-score');
 const slimeCountEl = document.getElementById('slime-count');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
 const nextSlimeHud = document.getElementById('next-slime-hud');
+const nextSlimeName = document.getElementById('next-slime-name');
+const collectionLabel = document.getElementById('collection-label');
 const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
@@ -69,6 +72,8 @@ const SLIME_CATEGORY = 0x0002;
 
 const mergeEffects = [];
 const stars = [];
+const nebulas = [];
+const cosmicDust = [];
 const tentacles = [];
 const ambientParticles = [];
 const TENTACLE_RANGE = 15;
@@ -150,6 +155,38 @@ function createStars() {
       twinkleSpeed: 0.5 + Math.random() * 2,
       twinklePhase: Math.random() * Math.PI * 2,
       color: Math.random() < 0.7 ? '#ffffff' : '#00f0ff'
+    });
+  }
+
+  nebulas.length = 0;
+  const nebulaSpecs = [
+    { fx: 0.16, fy: 0.58, size: 0.55, r: 'rgba(120, 40, 180, 0.20)', g: 'rgba(120, 40, 180, 0)', drift: 0.00032, phase: 1.3 },
+    { fx: 0.86, fy: 0.28, size: 0.48, r: 'rgba(30, 90, 220, 0.22)', g: 'rgba(30, 90, 220, 0)', drift: 0.00021, phase: 4.1 },
+    { fx: 0.5, fy: 0.88, size: 0.42, r: 'rgba(10, 170, 230, 0.12)', g: 'rgba(10, 170, 230, 0)', drift: 0.00027, phase: 2.2 }
+  ];
+  for (const spec of nebulaSpecs) {
+    nebulas.push({
+      fx: spec.fx + (Math.random() - 0.5) * 0.08,
+      fy: spec.fy + (Math.random() - 0.5) * 0.08,
+      size: spec.size * (0.85 + Math.random() * 0.3),
+      r: spec.r,
+      g: spec.g,
+      drift: spec.drift,
+      phase: spec.phase + Math.random() * 2
+    });
+  }
+
+  cosmicDust.length = 0;
+  for (let i = 0; i < 14; i++) {
+    cosmicDust.push({
+      x: Math.random() * canvasRect.width,
+      y: Math.random() * canvasRect.height,
+      size: 0.6 + Math.random() * 1.1,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: -0.05 - Math.random() * 0.14,
+      alpha: 0.12 + Math.random() * 0.25,
+      phase: Math.random() * Math.PI * 2,
+      color: Math.random() < 0.6 ? '#91c7ff' : '#c9a4ff'
     });
   }
 }
@@ -294,15 +331,26 @@ function updatePreviewPosition() {
   dropZoneIndicator.style.width = dropZoneWidth + 'px';
 }
 
+function stylePreviewElement(el, config, size, glow) {
+  el.style.width = size + 'px';
+  el.style.height = size + 'px';
+  if (config.isPlanet && config.palette) {
+    el.style.borderRadius = '50%';
+    const p = config.palette;
+    el.style.background = `radial-gradient(circle at 30% 30%, ${p.light}, ${p.base} 45%, ${p.dark})`;
+    el.style.boxShadow = `${glow ? '0 0 20px ' + p.glow + ', 0 0 40px ' + p.glow : '0 0 10px ' + p.glow}`;
+  } else {
+    el.style.borderRadius = '22%';
+    el.style.background = `radial-gradient(circle at 30% 30%, ${config.color}, ${config.glowColor})`;
+    el.style.boxShadow = `0 0 20px ${config.glowColor}, 0 0 40px ${config.glowColor}`;
+  }
+}
+
 function updatePreview() {
   if (!currentPreviewConfig) return;
 
   const size = currentPreviewConfig.radius * 2 * layoutScale;
-  previewEl.style.width = size + 'px';
-  previewEl.style.height = size + 'px';
-  previewEl.style.borderRadius = '22%';
-  previewEl.style.background = `radial-gradient(circle at 30% 30%, ${currentPreviewConfig.color}, ${currentPreviewConfig.glowColor})`;
-  previewEl.style.boxShadow = `0 0 20px ${currentPreviewConfig.glowColor}, 0 0 40px ${currentPreviewConfig.glowColor}`;
+  stylePreviewElement(previewEl, currentPreviewConfig, size, true);
   previewEl.classList.remove('hidden');
 }
 
@@ -318,10 +366,16 @@ function spawnNextSlime() {
   }
   nextSlimeConfig = getRandomLowLevelSlime();
 
-  nextSlimeDisplay.style.borderRadius = '22%';
-  nextSlimeDisplay.style.background = `radial-gradient(circle at 30% 30%, ${nextSlimeConfig.color}, ${nextSlimeConfig.glowColor})`;
+  const nb = nextSlimeConfig.radius * 2 * layoutScale;
+  stylePreviewElement(nextSlimeDisplay, nextSlimeConfig, nb, false);
   nextSlimeDisplay.style.border = '2px solid #ffd54e';
   nextSlimeDisplay.style.boxShadow = `0 0 8px rgba(255,213,78,0.8), 0 0 16px rgba(255,213,78,0.45), inset 0 0 4px rgba(255,213,78,0.6)`;
+  if (nextSlimeName) {
+    nextSlimeName.textContent = nextSlimeConfig.name;
+  }
+  if (collectionLabel) {
+    collectionLabel.textContent = getCollectionName(currentPreviewConfig.level);
+  }
 
   updatePreview();
   updatePreviewPosition();
@@ -637,6 +691,8 @@ function createMergeEffect(x, y, config) {
     color: config.glowColor,
     color2: config.color,
     radius: config.radius * layoutScale,
+    maxLevel: config.level,
+    name: config.name || null,
     time: 0,
     duration: 400,
     particles: [],
@@ -700,6 +756,10 @@ function updateUI() {
   scoreEl.textContent = score.toLocaleString();
   maxLevelEl.textContent = maxLevelReached;
   slimeCountEl.textContent = slimes.length;
+  if (collectionLabel) {
+    const cname = getCollectionName(maxLevelReached);
+    collectionLabel.textContent = cname || '';
+  }
 }
 
 function updateHighScoreUI() {
@@ -895,6 +955,7 @@ function renderCustom() {
 
   drawBackground(ctx, width, height, now);
   drawStars(ctx, now);
+  drawDust(ctx, now);
   drawBowl(ctx);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
@@ -980,37 +1041,66 @@ function easeOutBack(t) {
 }
 
 function drawBackground(ctx, width, height) {
-  ctx.fillStyle = '#050311';
+  const baseGrad = ctx.createLinearGradient(0, 0, 0, height);
+  baseGrad.addColorStop(0, '#07081c');
+  baseGrad.addColorStop(0.55, '#090b24');
+  baseGrad.addColorStop(1, '#0a0a1e');
+  ctx.fillStyle = baseGrad;
   ctx.fillRect(0, 0, width, height);
 
+  const now = performance.now();
   const maxDim = Math.max(width, height);
 
-  const leftNebula = ctx.createRadialGradient(
-    width * 0.15, height * 0.6, 0,
-    width * 0.15, height * 0.6, maxDim * 0.5
-  );
-  leftNebula.addColorStop(0, 'rgba(150, 0, 100, 0.25)');
-  leftNebula.addColorStop(1, 'rgba(150, 0, 100, 0)');
-  ctx.fillStyle = leftNebula;
-  ctx.fillRect(0, 0, width, height);
+  for (const nebula of nebulas) {
+    const cx = nebula.fx * width + Math.sin(now * nebula.drift + nebula.phase) * width * 0.035;
+    const cy = nebula.fy * height + Math.sin(now * nebula.drift * 0.7 + nebula.phase * 2) * height * 0.025;
+    const rad = maxDim * nebula.size;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    grad.addColorStop(0, nebula.r);
+    grad.addColorStop(1, nebula.g);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
 
-  const rightNebula = ctx.createRadialGradient(
-    width * 0.88, height * 0.3, 0,
-    width * 0.88, height * 0.3, maxDim * 0.45
-  );
-  rightNebula.addColorStop(0, 'rgba(0, 200, 255, 0.2)');
-  rightNebula.addColorStop(1, 'rgba(0, 200, 255, 0)');
-  ctx.fillStyle = rightNebula;
+  const farWorldX = width * 0.82 + Math.sin(now * 0.00008) * width * 0.03;
+  const farWorldY = height * 0.16;
+  const farR = maxDim * 0.055;
+  const farGrad = ctx.createRadialGradient(farWorldX, farWorldY, 0, farWorldX, farWorldY, farR * 4);
+  farGrad.addColorStop(0, 'rgba(120, 170, 255, 0.10)');
+  farGrad.addColorStop(0.35, 'rgba(90, 130, 230, 0.05)');
+  farGrad.addColorStop(1, 'rgba(90, 130, 230, 0)');
+  ctx.fillStyle = farGrad;
   ctx.fillRect(0, 0, width, height);
+  ctx.save();
+  ctx.globalAlpha = 0.14;
+  const worldGrad = ctx.createRadialGradient(farWorldX - farR * 0.3, farWorldY - farR * 0.3, farR * 0.1, farWorldX, farWorldY, farR);
+  worldGrad.addColorStop(0, '#9db8ff');
+  worldGrad.addColorStop(1, '#31407a');
+  ctx.fillStyle = worldGrad;
+  ctx.beginPath();
+  ctx.arc(farWorldX, farWorldY, farR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
-  const topNebula = ctx.createRadialGradient(
-    width * 0.5, height * 0.05, 0,
-    width * 0.5, height * 0.05, maxDim * 0.35
-  );
-  topNebula.addColorStop(0, 'rgba(0, 200, 255, 0.15)');
-  topNebula.addColorStop(1, 'rgba(0, 200, 255, 0)');
-  ctx.fillStyle = topNebula;
-  ctx.fillRect(0, 0, width, height);
+function drawDust(ctx, now) {
+  const width = canvasRect.width;
+  const height = canvasRect.height;
+  for (let i = 0; i < cosmicDust.length; i++) {
+    const d = cosmicDust[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    if (d.y < -4) { d.y = height + 4; d.x = Math.random() * width; }
+    if (d.x < -4) d.x = width + 4;
+    if (d.x > width + 4) d.x = -4;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+    ctx.fillStyle = d.color;
+    ctx.globalAlpha = d.alpha * (0.6 + 0.4 * Math.sin(now * 0.0009 + d.phase));
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 function drawStars(ctx, now) {
@@ -1159,6 +1249,19 @@ function drawMergeEffects(ctx) {
       ctx.fill();
     }
 
+    if (effect.name) {
+      ctx.save();
+      const labelAlpha = effect.shockwave.alpha;
+      ctx.globalAlpha = labelAlpha * 0.95;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = effect.color;
+      ctx.shadowBlur = 12;
+      ctx.font = `italic ${Math.max(14, Math.round(effect.radius * 0.42))}px "Pix Mono", "Segoe UI", system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(effect.name, effect.x, effect.y - effect.radius * effect.flash.scale - 7);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 }
@@ -1252,95 +1355,84 @@ function drawSlimes(ctx, now) {
     }
     const glowBlur = (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.6 + 0.4 * layoutScale);
 
+    const opacity = slime.opacity !== undefined ? slime.opacity : 1;
+
     ctx.save();
 
     ctx.translate(pos.x, pos.y);
     ctx.rotate(body.angle);
 
-    if (ctx.roundRect) {
-      ctx.beginPath();
-      ctx.roundRect(-sizeX / 2, -sizeY / 2, sizeX, sizeY, chamfer);
+    if (config.isPlanet) {
+      drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, glowBlur);
     } else {
-      ctx.beginPath();
-      ctx.rect(-sizeX / 2, -sizeY / 2, sizeX, sizeY);
-    }
-
-    const opacity = slime.opacity !== undefined ? slime.opacity : 1;
-    ctx.globalAlpha = opacity;
-
-    const grad = ctx.createLinearGradient(0, -sizeY / 2, 0, sizeY / 2);
-    if (config.legendary) {
-      const inner = `hsl(${(now * 0.03 + 220) % 360}, 100%, 78%)`;
-      grad.addColorStop(0, inner);
-      grad.addColorStop(0.45, '#ffffff');
-      grad.addColorStop(1, '#c8d2ff');
-    } else if (config.iridescent) {
-      const hue = (config.baseHue + now * 0.02) % 360;
-      grad.addColorStop(0, hslToHex((hue + 18) % 360, 88, 70));
-      grad.addColorStop(0.45, hslToHex(hue, 88, 60));
-      grad.addColorStop(1, hslToHex((hue + 342) % 360, 88, 50));
-    } else {
-      grad.addColorStop(0, lightenColor(config.color, 55));
-      grad.addColorStop(0.45, config.color);
-      grad.addColorStop(1, darkenColor(config.color, 25));
-    }
-
-    ctx.fillStyle = grad;
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = glowBlur;
-    ctx.fill();
-
-    if (slime.mergeAnim) {
-      const mp = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
-      ctx.fillStyle = '#ffffff';
-      ctx.globalAlpha = opacity * (1 - mp) * 0.45;
-      ctx.shadowBlur = glowBlur * 1.5;
-      ctx.fill();
-      ctx.globalAlpha = opacity;
-    }
-
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = opacity * 0.75;
-    ctx.stroke();
-
-    if (config.aura > 0) {
-      ctx.save();
-      ctx.globalAlpha = opacity * 0.5 * config.aura;
-      for (let i = 0; i < 3; i++) {
-        const a = now * 0.001 * (0.7 + i * 0.3) + i * 2.1;
-        const ar = r * 1.12 + Math.sin(now * 0.002 + i * 2.4) * r * 0.28;
-        const mx = Math.cos(a) * ar;
-        const my = Math.sin(a * 1.35) * ar * 0.85;
+      if (ctx.roundRect) {
         ctx.beginPath();
-        ctx.arc(mx, my, Math.max(1.2, r * 0.055), 0, Math.PI * 2);
-        ctx.fillStyle = glowColor;
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 8;
-        ctx.fill();
+        ctx.roundRect(-sizeX / 2, -sizeY / 2, sizeX, sizeY, chamfer);
+      } else {
+        ctx.beginPath();
+        ctx.rect(-sizeX / 2, -sizeY / 2, sizeX, sizeY);
       }
-      ctx.restore();
-    }
 
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(-sizeX / 2 + 3, -sizeY / 2 + 3, sizeX - 6, sizeY - 6, Math.max(2, chamfer - 2));
-    } else {
-      ctx.rect(-sizeX / 2 + 3, -sizeY / 2 + 3, sizeX - 6, sizeY - 6);
-    }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-    ctx.lineWidth = 1.2;
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = opacity;
-    ctx.stroke();
+      ctx.globalAlpha = opacity;
 
-    ctx.beginPath();
-    ctx.moveTo(-sizeX * 0.3, -sizeY * 0.28);
-    ctx.lineTo(sizeX * 0.05, -sizeY * 0.35);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-    ctx.stroke();
+      const grad = ctx.createLinearGradient(0, -sizeY / 2, 0, sizeY / 2);
+      if (config.legendary) {
+        const inner = `hsl(${(now * 0.03 + 220) % 360}, 100%, 78%)`;
+        grad.addColorStop(0, inner);
+        grad.addColorStop(0.45, '#ffffff');
+        grad.addColorStop(1, '#c8d2ff');
+      } else if (config.iridescent) {
+        const hue = (config.baseHue + now * 0.02) % 360;
+        grad.addColorStop(0, hslToHex((hue + 18) % 360, 88, 70));
+        grad.addColorStop(0.45, hslToHex(hue, 88, 60));
+        grad.addColorStop(1, hslToHex((hue + 342) % 360, 88, 50));
+      } else {
+        grad.addColorStop(0, lightenColor(config.color, 55));
+        grad.addColorStop(0.45, config.color);
+        grad.addColorStop(1, darkenColor(config.color, 25));
+      }
+
+      ctx.fillStyle = grad;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = glowBlur;
+      ctx.fill();
+
+      if (slime.mergeAnim) {
+        const mp = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = opacity * (1 - mp) * 0.45;
+        ctx.shadowBlur = glowBlur * 1.5;
+        ctx.fill();
+        ctx.globalAlpha = opacity;
+      }
+
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = opacity * 0.75;
+      ctx.stroke();
+
+      drawAura(ctx, config, r, now, opacity, glowColor);
+
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(-sizeX / 2 + 3, -sizeY / 2 + 3, sizeX - 6, sizeY - 6, Math.max(2, chamfer - 2));
+      } else {
+        ctx.rect(-sizeX / 2 + 3, -sizeY / 2 + 3, sizeX - 6, sizeY - 6);
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.lineWidth = 1.2;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = opacity;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-sizeX * 0.3, -sizeY * 0.28);
+      ctx.lineTo(sizeX * 0.05, -sizeY * 0.35);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
 
     drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY);
     drawSlimeFace(ctx, slime, now, sizeX, sizeY);
@@ -1350,9 +1442,302 @@ function drawSlimes(ctx, now) {
   }
 }
 
+function hexA(hex, alpha) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function seededRnd(seed, i) {
+  const x = Math.sin(seed * 127.1 + i * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function drawAura(ctx, config, r, now, opacity, glowColor) {
+  const aura = config.aura;
+  if (!aura) return;
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.5 * aura;
+  for (let i = 0; i < 3; i++) {
+    const a = now * 0.001 * (0.7 + i * 0.3) + i * 2.1;
+    const ar = r * 1.12 + Math.sin(now * 0.002 + i * 2.4) * r * 0.28;
+    const mx = Math.cos(a) * ar;
+    const my = Math.sin(a * 1.35) * ar * 0.85;
+    ctx.beginPath();
+    ctx.arc(mx, my, Math.max(1.2, r * 0.055), 0, Math.PI * 2);
+    ctx.fillStyle = glowColor;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, glowBlur) {
+  const p = config.palette;
+  const R = r;
+
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.3;
+  const haloR = R * 1.65 + Math.sin(now * 0.002 + slime.seed) * R * 0.06;
+  const halo = ctx.createRadialGradient(0, 0, R * 0.7, 0, 0, haloR);
+  halo.addColorStop(0, hexA(p.glow, 0.45));
+  halo.addColorStop(1, hexA(p.glow, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (config.surface === 'corona') {
+    drawSolarCorona(ctx, slime, config, R, now, opacity);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = glowBlur;
+  const bodyGrad = ctx.createRadialGradient(-R * 0.32, -R * 0.36, R * 0.1, 0, 0, R);
+  bodyGrad.addColorStop(0, p.light);
+  bodyGrad.addColorStop(0.45, p.base);
+  bodyGrad.addColorStop(1, p.dark);
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.995, 0, Math.PI * 2);
+  ctx.clip();
+  drawPlanetSurface(ctx, slime, config, R, now, p);
+  ctx.restore();
+
+  if (slime.mergeAnim) {
+    const mp = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
+    ctx.save();
+    ctx.globalAlpha = opacity * (1 - mp) * 0.55;
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    fg.addColorStop(0, '#ffffff');
+    fg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (config.ring) {
+    drawPlanetRings(ctx, slime, config, R, now, opacity);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.55;
+  ctx.strokeStyle = p.rim;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(1.5, R * 0.055);
+  ctx.shadowColor = p.rim;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, 0, R - ctx.lineWidth * 0.5, Math.PI * 1.12, Math.PI * 1.66);
+  ctx.stroke();
+  ctx.globalAlpha = opacity * 0.8;
+  ctx.lineWidth = 1.6;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = hexA(p.rim, 0.8);
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  drawAura(ctx, config, R, now, opacity, glowColor);
+}
+
+function drawPlanetRings(ctx, slime, config, R, now, opacity) {
+  const p = config.palette;
+  const saturn = config.planet === 'saturn';
+  ctx.save();
+  ctx.rotate(-slime.body.angle);
+  let glint = 0.6 + 0.25 * Math.sin(now * 0.003 + slime.seed);
+  if (slime.mergeAnim) {
+    glint += 0.3 * (1 - Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1));
+  }
+  ctx.globalAlpha = opacity * glint;
+  const bands = saturn ? [1.38, 1.72] : [1.5];
+  const widths = saturn ? [R * 0.16, R * 0.1] : [R * 0.06];
+  const ringColor = saturn ? 'rgba(242, 226, 172, 0.95)' : 'rgba(190, 240, 255, 0.8)';
+  for (let i = 0; i < bands.length; i++) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, R * bands[i], R * (0.4 - i * 0.07), -0.12, 0, Math.PI * 2);
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = widths[i];
+    ctx.shadowColor = p.rim;
+    ctx.shadowBlur = saturn ? 8 : 4;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSolarCorona(ctx, slime, config, R, now, opacity) {
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.5;
+  const rays = 10;
+  for (let i = 0; i < rays; i++) {
+    const a = (Math.PI * 2 * i) / rays + now * 0.0004 + slime.seed;
+    const r0 = R * (1.0 + 0.1 * Math.sin(now * 0.002 + i));
+    const r1 = R * (1.5 + 0.22 * Math.sin(now * 0.0025 + i * 2));
+    const grad = ctx.createLinearGradient(0, 0, Math.cos(a) * r1, Math.sin(a) * r1);
+    grad.addColorStop(0, 'rgba(255, 210, 90, 0)');
+    grad.addColorStop(0.7, 'rgba(255, 214, 90, 0.3)');
+    grad.addColorStop(0.92, 'rgba(255, 246, 196, 0.55)');
+    ctx.strokeStyle = grad;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2, R * 0.1);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+    ctx.lineTo(Math.cos(a) * (r1 - R * 0.15), Math.sin(a) * (r1 - R * 0.15));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPlanetSurface(ctx, slime, config, R, now, p) {
+  const s = config.surface;
+  switch (s) {
+    case 'corona': {
+      const pulse = 0.8 + 0.2 * Math.sin(now * 0.005);
+      const core = ctx.createRadialGradient(0, 0, R * 0.04, 0, 0, R);
+      core.addColorStop(0, `rgba(255, 250, 222, ${0.95 * pulse})`);
+      core.addColorStop(0.5, 'rgba(255, 214, 90, 0.85)');
+      core.addColorStop(1, 'rgba(255, 150, 30, 0.28)');
+      ctx.fillStyle = core;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      break;
+    }
+    case 'craters': {
+      ctx.strokeStyle = 'rgba(214, 220, 230, 0.28)';
+      for (let i = 0; i < 4; i++) {
+        const a = seededRnd(slime.seed, i) * Math.PI * 2;
+        const dist = R * (0.22 + seededRnd(slime.seed, i * 2 + 1) * 0.45);
+        const cr = R * (0.09 + seededRnd(slime.seed, i * 3 + 2) * 0.13);
+        const cx = Math.cos(a) * dist;
+        const cy = Math.sin(a) * dist * 0.85;
+        ctx.fillStyle = 'rgba(42, 46, 54, 0.55)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx - cr * 0.2, cy - cr * 0.2, cr * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'clouds': {
+      ctx.fillStyle = 'rgba(255, 238, 190, 0.3)';
+      for (let i = 0; i < 5; i++) {
+        const y = -R + i * R * 0.5 + seededRnd(slime.seed, i) * R * 0.12;
+        const sway = Math.sin(now * 0.001 + i + slime.seed) * R * 0.15;
+        const w = R * (0.55 + seededRnd(slime.seed, i + 7) * 0.25);
+        const h = R * (0.1 + seededRnd(slime.seed, i + 3) * 0.06);
+        ctx.beginPath();
+        ctx.ellipse(sway, y, w, h, -0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'continents': {
+      ctx.fillStyle = 'rgba(62, 170, 96, 0.85)';
+      for (let i = 0; i < 3; i++) {
+        const a = seededRnd(slime.seed, i) * Math.PI * 2;
+        const dist = R * (0.3 + seededRnd(slime.seed, i * 2 + 1) * 0.35);
+        const bw = R * (0.24 + seededRnd(slime.seed, i * 3 + 2) * 0.22);
+        const bh = R * (0.18 + seededRnd(slime.seed, i * 4 + 3) * 0.18);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist * 0.8, bw, bh, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      for (let i = 0; i < 3; i++) {
+        const a = seededRnd(slime.seed, i + 11) * Math.PI * 2;
+        const dist = R * (0.4 + seededRnd(slime.seed, i * 2 + 1 + 20) * 0.4);
+        const w = R * (0.2 + seededRnd(slime.seed, i + 5) * 0.16);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist * 0.8, w, R * 0.09, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'rocky': {
+      ctx.fillStyle = 'rgba(92, 31, 21, 0.5)';
+      for (let i = 0; i < 4; i++) {
+        const a = seededRnd(slime.seed, i * 5) * Math.PI * 2;
+        const dist = R * (0.2 + seededRnd(slime.seed, i * 2 + 1 + 40) * 0.5);
+        const rr = R * (0.07 + seededRnd(slime.seed, i + 9) * 0.1);
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * dist, Math.sin(a) * dist * 0.85, rr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'bands': {
+      const bandColors = config.planet === 'saturn'
+        ? ['#e8d7a0', '#cbb67a', '#e2ce93', '#bfa76a', '#d6c088']
+        : ['#e8c291', '#c7874c', '#a5633e', '#e2bc8e', '#b27147', '#d8a36a'];
+      for (let i = 0; i < bandColors.length; i++) {
+        const h = (2 * R) / bandColors.length * (0.9 + 0.2 * seededRnd(slime.seed, i));
+        const y0 = -R + i * (2 * R) / bandColors.length;
+        ctx.fillStyle = hexA(bandColors[i], 0.55 - (i % 2) * 0.12);
+        ctx.beginPath();
+        ctx.ellipse(0, y0 + h / 2, R * 1.4, h / 2, -0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (config.planet === 'jupiter') {
+        ctx.fillStyle = '#b73a2a';
+        ctx.beginPath();
+        ctx.ellipse(R * 0.14, R * 0.12, R * 0.2, R * 0.13, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 190, 170, 0.5)';
+        ctx.beginPath();
+        ctx.ellipse(R * 0.09, R * 0.08, R * 0.11, R * 0.07, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'smooth': {
+      const ug = ctx.createLinearGradient(0, -R, 0, R);
+      ug.addColorStop(0, 'rgba(220, 250, 255, 0.35)');
+      ug.addColorStop(0.5, 'rgba(190, 240, 255, 0.08)');
+      ug.addColorStop(1, 'rgba(120, 200, 255, 0.3)');
+      ctx.fillStyle = ug;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      break;
+    }
+    case 'storm': {
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = `rgba(${50 + i * 20}, ${80 + i * 15}, ${205 - i * 22}, ${0.12 + i * 0.03})`;
+        ctx.beginPath();
+        ctx.ellipse(0, -R * 0.5 + i * R * 0.5, R * 1.35, R * 0.08, -0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(20, 40, 110, 0.7)';
+      ctx.beginPath();
+      ctx.ellipse(R * 0.22, -R * 0.15, R * 0.16, R * 0.12, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(150, 200, 255, 0.5)';
+      ctx.beginPath();
+      ctx.ellipse(R * 0.42, R * 0.26, R * 0.09, R * 0.06, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+  }
+}
+
 function drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY) {
   const style = config.visualStyle;
-  if (!style || style === 'solid') return;
+  if (!style || style === 'solid' || style === 'planet') return;
   const hw = sizeX / 2;
   const hh = sizeY / 2;
   const opacity = slime.opacity !== undefined ? slime.opacity : 1;
@@ -1520,7 +1905,8 @@ const AMBIENT_PARTICLE_KINDS = {
   ember: { kind: 'glow', vy: 0.42, vx: 0.18, life: 52, decay: 0.016, sizeMul: 1.0, color: '#ff8a5c' },
   cosmic_stars: { kind: 'dot', vy: 0.1, vx: 0.1, life: 80, decay: 0.01, sizeMul: 0.8, color: '#c995ff' },
   prism_shimmer: { kind: 'dot', vy: 0.5, vx: 0.3, life: 40, decay: 0.02, sizeMul: 0.9, color: '#bffcff' },
-  hyper_sparkles: { kind: 'cross', vy: 0.9, vx: 0.6, life: 22, decay: 0.036, sizeMul: 1.2, color: '#9fd8ff' }
+  hyper_sparkles: { kind: 'cross', vy: 0.9, vx: 0.6, life: 22, decay: 0.036, sizeMul: 1.2, color: '#9fd8ff' },
+  solar_flare: { kind: 'glow', vy: 0.14, vx: 0.05, life: 62, decay: 0.013, sizeMul: 1.0, color: '#ffe9a0' }
 };
 
 function spawnAmbientParticle(slime) {
@@ -1554,7 +1940,7 @@ function updateAmbientParticles() {
     const cfg = slime.config;
     if (!cfg.particleType) continue;
     if (slime.opacity < 0.3 || slime.mergeAnim) continue;
-    const interval = (cfg.visualStyle === 'singularity' || cfg.visualStyle === 'iridescent') ? 220 : 340;
+    const interval = (cfg.visualStyle === 'singularity' || cfg.visualStyle === 'iridescent' || cfg.particleType === 'solar_flare') ? 150 : 340;
     slime.particleTimer -= dt;
     if (slime.particleTimer <= 0) {
       slime.particleTimer = interval * (0.6 + Math.random() * 0.8);
