@@ -24,7 +24,6 @@ const maxLevelEl = document.getElementById('max-level');
 const highScoreEl = document.getElementById('high-score');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
 const nextSlimeHud = document.getElementById('next-slime-hud');
-const nextSlimeName = document.getElementById('next-slime-name');
 const collectionLabel = document.getElementById('collection-label');
 const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
@@ -341,15 +340,17 @@ function updatePreviewPosition() {
 }
 
 function stylePreviewElement(el, config, size, glow) {
-  el.style.width = size + 'px';
-  el.style.height = size + 'px';
+  if (size != null) {
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+  }
   if (config.isPlanet && config.palette) {
     el.style.borderRadius = '50%';
     const p = config.palette;
     el.style.background = `radial-gradient(circle at 30% 30%, ${p.light}, ${p.base} 45%, ${p.dark})`;
     el.style.boxShadow = `${glow ? '0 0 20px ' + p.glow + ', 0 0 40px ' + p.glow : '0 0 10px ' + p.glow}`;
   } else {
-    el.style.borderRadius = '22%';
+    el.style.borderRadius = size == null ? '50%' : '22%';
     el.style.background = `radial-gradient(circle at 30% 30%, ${config.color}, ${config.glowColor})`;
     el.style.boxShadow = `0 0 20px ${config.glowColor}, 0 0 40px ${config.glowColor}`;
   }
@@ -376,13 +377,9 @@ function spawnNextSlime() {
   }
   nextSlimeConfig = getRandomLowLevelSlime();
 
-  const nb = nextSlimeConfig.radius * 2 * layoutScale;
-  stylePreviewElement(nextSlimeDisplay, nextSlimeConfig, nb, false);
+  stylePreviewElement(nextSlimeDisplay, nextSlimeConfig, null, false);
   nextSlimeDisplay.style.border = '2px solid #ffd54e';
   nextSlimeDisplay.style.boxShadow = `0 0 8px rgba(255,213,78,0.8), 0 0 16px rgba(255,213,78,0.45), inset 0 0 4px rgba(255,213,78,0.6)`;
-  if (nextSlimeName) {
-    nextSlimeName.textContent = nextSlimeConfig.name;
-  }
   if (collectionLabel) {
     collectionLabel.textContent = getCollectionName(currentPreviewConfig.level);
   }
