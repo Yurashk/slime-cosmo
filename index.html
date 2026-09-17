@@ -16,22 +16,22 @@
         <div id="drop-zone-indicator" class="drop-zone-indicator"></div>
         
         <div id="hud" class="hud">
-          <div class="hud-row">
-            <div class="hud-item">
-              <span id="score" class="hud-value">0</span>
-              <span class="hud-label">SCORE</span>
+          <div class="hud-left">
+            <div class="glass-panel score-panel">
+              <span class="score-label">SCORE</span>
+              <span id="score" class="score-value">0</span>
+              <i class="panel-line"></i>
+              <div class="best-row">
+                <span class="best-label">BEST</span>
+                <span id="high-score" class="best-value">0</span>
+              </div>
             </div>
-            <div class="hud-item">
-              <span id="max-level" class="hud-value">1</span>
-              <span class="hud-label">MAX LEVEL</span>
-            </div>
-            <div class="hud-item">
-              <span id="high-score" class="hud-value">0</span>
-              <span class="hud-label">BEST</span>
-            </div>
-            <div class="hud-item">
-              <span id="slime-count" class="hud-value">0</span>
-              <span class="hud-label">SLIMES</span>
+          </div>
+          <div class="hud-right">
+            <button id="restart-btn" class="restart-btn">⟳</button>
+            <div class="glass-panel max-panel">
+              <span class="max-label">MAX LV</span>
+              <span id="max-level" class="max-value">1</span>
             </div>
           </div>
         </div>

@@ -136,52 +136,158 @@ body::before {
 
 .hud {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(10px + env(safe-area-inset-top));
   left: calc(12px + env(safe-area-inset-left));
   right: calc(12px + env(safe-area-inset-right));
   z-index: 5;
   pointer-events: none;
-}
-
-.hud-row {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
 }
 
-.hud-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 10px;
-  background: linear-gradient(160deg, rgba(20, 26, 52, 0.72), rgba(10, 12, 28, 0.82));
-  border: 1px solid rgba(120, 190, 255, 0.28);
-  border-radius: 10px;
+.glass-panel {
+  position: relative;
+  background:
+    radial-gradient(1px 1px at 78% 18%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 88% 66%, rgba(140, 220, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 30% 86%, rgba(255, 255, 255, 0.35), transparent 60%),
+    linear-gradient(160deg, rgba(22, 30, 64, 0.6), rgba(9, 11, 28, 0.66));
+  border: 1px solid rgba(140, 200, 255, 0.22);
+  border-radius: 16px;
   box-shadow:
-    0 0 0 1px rgba(0, 255, 255, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 4px 14px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(8px);
-  min-width: 70px;
-  flex: 1;
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -8px 18px rgba(0, 20, 60, 0.25),
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(60, 150, 255, 0.12);
+  backdrop-filter: blur(10px);
 }
 
-.hud-value {
-  font-size: clamp(16px, 3vw, 22px);
+.score-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 14px 9px;
+}
+
+.score-label {
+  align-self: flex-end;
+  font-size: clamp(7px, 1.2vw, 9px);
   font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(130, 220, 255, 0.85);
+  text-shadow: 0 0 8px rgba(0, 200, 255, 0.45);
+  line-height: 1;
+  margin-bottom: 3px;
+}
+
+.score-value {
+  font-size: clamp(22px, 4.5vw, 32px);
+  font-weight: 800;
   font-family: 'Courier New', monospace;
   color: var(--neon-cyan);
-  text-shadow: 0 0 10px var(--neon-cyan);
+  text-shadow: 0 0 14px var(--neon-cyan), 0 0 40px rgba(0, 255, 255, 0.4);
   line-height: 1;
 }
 
-.hud-label {
+.panel-line {
+  display: block;
+  height: 1px;
+  width: 100%;
+  margin: 6px 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.35), transparent);
+}
+
+.best-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.best-label {
   font-size: clamp(7px, 1.2vw, 9px);
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(170, 200, 240, 0.75);
+  color: rgba(200, 220, 255, 0.6);
+}
+
+.best-value {
+  font-size: clamp(12px, 2.2vw, 16px);
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: rgba(190, 230, 255, 0.95);
+  text-shadow: 0 0 10px rgba(140, 200, 255, 0.4);
+  line-height: 1;
+}
+
+.hud-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.restart-btn {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--neon-cyan);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.12), transparent 55%),
+    linear-gradient(160deg, rgba(24, 34, 72, 0.66), rgba(9, 11, 28, 0.7));
+  border: 1px solid rgba(140, 200, 255, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 14px rgba(0, 255, 255, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.restart-btn:hover {
+  transform: translateY(-1px) rotate(90deg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 22px rgba(0, 255, 255, 0.35),
+    0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.restart-btn:active {
+  transform: rotate(180deg) scale(0.94);
+}
+
+.max-panel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.max-label {
+  font-size: clamp(6px, 1.1vw, 8px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(200, 220, 255, 0.6);
+}
+
+.max-value {
+  font-size: clamp(11px, 2vw, 14px);
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: rgba(255, 215, 140, 0.95);
+  text-shadow: 0 0 10px rgba(255, 190, 80, 0.45);
   line-height: 1;
 }
 
@@ -270,38 +376,6 @@ body::before {
     inset 0 0 4px rgba(255, 213, 78, 0.6);
 }
 
-.restart-btn {
-  position: absolute;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  right: calc(12px + env(safe-area-inset-right));
-  padding: 10px 18px;
-  font-size: clamp(10px, 1.5vw, 12px);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--bg-primary);
-  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-blue));
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  z-index: 5;
-  box-shadow:
-    0 0 15px rgba(0, 255, 255, 0.5),
-    0 3px 10px rgba(0, 255, 255, 0.3);
-  transition: all 0.2s ease;
-}
-
-.restart-btn:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 25px rgba(0, 255, 255, 0.7),
-    0 5px 15px rgba(0, 255, 255, 0.4);
-}
-
-.restart-btn:active {
-  transform: translateY(0);
-}
-
 .overlay {
   position: fixed;
   inset: 0;
@@ -373,19 +447,16 @@ body::before {
 }
 
 @media (max-width: 480px) {
-  .hud-row {
-    gap: 4px;
-  }
-  .hud-item {
-    padding: 4px 6px;
-    min-width: 55px;
-  }
-  .hud-value {
-    font-size: 14px;
+  .score-panel {
+    padding: 6px 10px 7px;
   }
   .restart-btn {
-    min-height: 44px;
-    padding: 10px 18px;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+  .max-panel {
+    padding: 3px 8px;
   }
   .next-name {
     max-width: 140px;
@@ -407,15 +478,17 @@ body::before {
   .game-main {
     padding: 4px;
   }
-  .hud-item {
-    padding: 3px 5px;
-    min-width: 48px;
+  .score-panel {
+    padding: 4px 8px 5px;
   }
-  .hud-value {
-    font-size: 12px;
+  .score-value {
+    font-size: 20px;
   }
-  .hud-label {
-    font-size: 6px;
+  .panel-line {
+    margin: 4px 0;
+  }
+  .max-panel {
+    display: none;
   }
   .next-slime-display {
     width: 30px;
@@ -429,8 +502,9 @@ body::before {
     gap: 6px;
   }
   .restart-btn {
-    padding: 6px 12px;
-    font-size: 10px;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 }
 

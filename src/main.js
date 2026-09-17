@@ -22,7 +22,6 @@ const dropZoneIndicator = document.getElementById('drop-zone-indicator');
 const scoreEl = document.getElementById('score');
 const maxLevelEl = document.getElementById('max-level');
 const highScoreEl = document.getElementById('high-score');
-const slimeCountEl = document.getElementById('slime-count');
 const nextSlimeDisplay = document.getElementById('next-slime-display');
 const nextSlimeHud = document.getElementById('next-slime-hud');
 const nextSlimeName = document.getElementById('next-slime-name');
@@ -95,6 +94,11 @@ function randItem(arr) {
 function init() {
   updateCanvasRect();
   window.addEventListener('resize', updateCanvasRect);
+  window.addEventListener('load', updateCanvasRect);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateCanvasRect);
+  }
+  requestAnimationFrame(updateCanvasRect);
 
   engine = Engine.create();
   engine.world.gravity.y = 0.9;
@@ -119,7 +123,12 @@ function init() {
 }
 
 function updateCanvasRect() {
-  canvasRect = canvas.getBoundingClientRect();
+  const rect = canvas.getBoundingClientRect();
+  if (!rect || rect.width < 2 || rect.height < 2) {
+    requestAnimationFrame(() => setTimeout(updateCanvasRect, 16));
+    return;
+  }
+  canvasRect = rect;
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   layoutScale = Math.max(0.58, Math.min(1, canvasRect.width / 640));
   canvas.width = canvasRect.width * dpr;
@@ -698,7 +707,6 @@ function createMergeEffect(x, y, config) {
     color2: config.color,
     radius: config.radius * layoutScale,
     maxLevel: config.level,
-    name: config.name || null,
     time: 0,
     duration: 400,
     particles: [],
@@ -761,7 +769,6 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
 function updateUI() {
   scoreEl.textContent = score.toLocaleString();
   maxLevelEl.textContent = maxLevelReached;
-  slimeCountEl.textContent = slimes.length;
   if (collectionLabel) {
     const cname = getCollectionName(maxLevelReached);
     collectionLabel.textContent = cname || '';
@@ -1253,19 +1260,6 @@ function drawMergeEffects(ctx) {
       ctx.shadowColor = p.color;
       ctx.shadowBlur = 8;
       ctx.fill();
-    }
-
-    if (effect.name) {
-      ctx.save();
-      const labelAlpha = effect.shockwave.alpha;
-      ctx.globalAlpha = labelAlpha * 0.95;
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = effect.color;
-      ctx.shadowBlur = 12;
-      ctx.font = `italic ${Math.max(14, Math.round(effect.radius * 0.42))}px "Pix Mono", "Segoe UI", system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(effect.name, effect.x, effect.y - effect.radius * effect.flash.scale - 7);
-      ctx.restore();
     }
 
     ctx.restore();

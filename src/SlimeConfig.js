@@ -168,7 +168,9 @@ function makeConfig(level) {
 export const SLIME_CONFIGS = Array.from({ length: MAX_SLIME_LEVEL }, (_, i) => {
   const level = i + 1;
   const base = level <= BASE_CONFIGS.length ? { ...BASE_CONFIGS[i] } : makeConfig(level);
-  return { ...base, ...buildVisuals(level) };
+  const cfg = { ...base, ...buildVisuals(level) };
+  if (cfg.isPlanet) cfg.radius = Math.round(cfg.radius * 0.9);
+  return cfg;
 });
 
 export function getSlimeConfig(level) {
