@@ -1476,12 +1476,31 @@ function drawAura(ctx, config, r, now, opacity, glowColor) {
 
 function drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, glowBlur) {
   const p = config.palette;
-  const R = r;
+  const boxX = r * 2 * scale;
+  const boxY = r * 2 * scale;
+  const chamfer = Math.min(boxX * 0.3, (config.chamfer || 8) * layoutScale * scale);
+  const FILL = 0.94;
+  const w = boxX * FILL;
+  const h = boxY * FILL;
+  const c = Math.max(2, chamfer * FILL);
+  const gw = w / 2;
+
+  const basePath = (sx = 1, sy = 1) => {
+    const cw = w * sx;
+    const ch = h * sy;
+    const cc = Math.max(2, c * Math.min(sx, sy));
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(-cw / 2, -ch / 2, cw, ch, cc);
+    } else {
+      ctx.rect(-cw / 2, -ch / 2, cw, ch);
+    }
+  };
 
   ctx.save();
   ctx.globalAlpha = opacity * 0.3;
-  const haloR = R * 1.65 + Math.sin(now * 0.002 + slime.seed) * R * 0.06;
-  const halo = ctx.createRadialGradient(0, 0, R * 0.7, 0, 0, haloR);
+  const haloR = gw * 1.6 + Math.sin(now * 0.002 + slime.seed) * gw * 0.08;
+  const halo = ctx.createRadialGradient(0, 0, gw * 0.55, 0, 0, haloR);
   halo.addColorStop(0, hexA(p.glow, 0.45));
   halo.addColorStop(1, hexA(p.glow, 0));
   ctx.fillStyle = halo;
@@ -1491,68 +1510,64 @@ function drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, g
   ctx.restore();
 
   if (config.surface === 'corona') {
-    drawSolarCorona(ctx, slime, config, R, now, opacity);
+    drawSolarCorona(ctx, slime, config, gw, now, opacity);
   }
 
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = glowBlur;
-  const bodyGrad = ctx.createRadialGradient(-R * 0.32, -R * 0.36, R * 0.1, 0, 0, R);
+  const bodyGrad = ctx.createRadialGradient(-gw * 0.28, -gw * 0.32, gw * 0.12, 0, 0, gw * 1.6);
   bodyGrad.addColorStop(0, p.light);
   bodyGrad.addColorStop(0.45, p.base);
   bodyGrad.addColorStop(1, p.dark);
   ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  basePath();
   ctx.fill();
   ctx.restore();
 
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(0, 0, R * 0.995, 0, Math.PI * 2);
+  basePath();
   ctx.clip();
-  drawPlanetSurface(ctx, slime, config, R, now, p);
+  drawPlanetSurface(ctx, slime, config, gw, now, p);
   ctx.restore();
 
   if (slime.mergeAnim) {
     const mp = Math.min(slime.mergeAnim.elapsed / slime.mergeAnim.duration, 1);
     ctx.save();
     ctx.globalAlpha = opacity * (1 - mp) * 0.55;
-    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, gw);
     fg.addColorStop(0, '#ffffff');
     fg.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = fg;
-    ctx.beginPath();
-    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    basePath();
     ctx.fill();
     ctx.restore();
   }
 
   if (config.ring) {
-    drawPlanetRings(ctx, slime, config, R, now, opacity);
+    drawPlanetRings(ctx, slime, config, gw, now, opacity);
   }
 
   ctx.save();
-  ctx.globalAlpha = opacity * 0.55;
+  ctx.globalAlpha = opacity * 0.45;
+  ctx.strokeStyle = hexA(p.rim, 0.4);
+  ctx.lineWidth = 1.6;
+  basePath();
+  ctx.stroke();
+
+  ctx.globalAlpha = opacity * 0.6;
   ctx.strokeStyle = p.rim;
   ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(1.5, R * 0.055);
+  ctx.lineWidth = Math.max(1.5, gw * 0.05);
   ctx.shadowColor = p.rim;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 8;
   ctx.beginPath();
-  ctx.arc(0, 0, R - ctx.lineWidth * 0.5, Math.PI * 1.12, Math.PI * 1.66);
-  ctx.stroke();
-  ctx.globalAlpha = opacity * 0.8;
-  ctx.lineWidth = 1.6;
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = hexA(p.rim, 0.8);
-  ctx.beginPath();
-  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.arc(-gw * 0.05, -gw * 0.05, gw * 0.92, Math.PI * 1.08, Math.PI * 1.62);
   ctx.stroke();
   ctx.restore();
 
-  drawAura(ctx, config, R, now, opacity, glowColor);
+  drawAura(ctx, config, gw, now, opacity, glowColor);
 }
 
 function drawPlanetRings(ctx, slime, config, R, now, opacity) {
