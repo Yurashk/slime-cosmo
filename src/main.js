@@ -403,14 +403,13 @@ function dropSlime() {
 }
 
 function createSlime(x, y, config) {
-  const side = config.radius * 2 * layoutScale;
-  const body = Bodies.rectangle(x, y, side, side, {
-    density: config.density,
+  const radPx = config.radius * layoutScale;
+  const baseOptions = {
+    density: config.isPlanet ? config.density * (4 / Math.PI) : config.density,
     restitution: Math.min(config.restitution, 0.15),
     friction: config.friction,
     frictionAir: 0.05,
     frictionStatic: 0.5,
-    chamfer: { radius: config.chamfer * layoutScale },
     render: {
       fillStyle: config.color,
       strokeStyle: config.glowColor,
@@ -425,7 +424,14 @@ function createSlime(x, y, config) {
       slimeConfig: config,
       mergeCooldown: 0
     }
-  });
+  };
+
+  const body = config.isPlanet
+    ? Bodies.circle(x, y, radPx, baseOptions)
+    : Bodies.rectangle(x, y, radPx * 2, radPx * 2, {
+        ...baseOptions,
+        chamfer: { radius: config.chamfer * layoutScale }
+      });
 
   return {
     body,
