@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#080810">
   <title>Neon Slime Balance</title>
-  <script type="module" crossorigin src="/slime-cosmo/assets/index-CuYgbXFC.js"></script>
-  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-Dp_yTLAL.css">
+  <script type="module" crossorigin src="/slime-cosmo/assets/index-DZGvEDsT.js"></script>
+  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-BhwNxmQd.css">
 </head>
 <body>
   <div class="game-container">
@@ -17,22 +17,22 @@
         <div id="drop-zone-indicator" class="drop-zone-indicator"></div>
         
         <div id="hud" class="hud">
-          <div class="hud-row">
-            <div class="hud-item">
-              <span id="score" class="hud-value">0</span>
-              <span class="hud-label">SCORE</span>
+          <div class="hud-left">
+            <div class="glass-panel score-panel">
+              <span class="score-label">SCORE</span>
+              <span id="score" class="score-value">0</span>
+              <i class="panel-line"></i>
+              <div class="best-row">
+                <span class="best-label">BEST</span>
+                <span id="high-score" class="best-value">0</span>
+              </div>
             </div>
-            <div class="hud-item">
-              <span id="max-level" class="hud-value">1</span>
-              <span class="hud-label">MAX LEVEL</span>
-            </div>
-            <div class="hud-item">
-              <span id="high-score" class="hud-value">0</span>
-              <span class="hud-label">BEST</span>
-            </div>
-            <div class="hud-item">
-              <span id="slime-count" class="hud-value">0</span>
-              <span class="hud-label">SLIMES</span>
+          </div>
+          <div class="hud-right">
+            <button id="restart-btn" class="restart-btn">⟳</button>
+            <div class="glass-panel max-panel">
+              <span class="max-label">MAX LV</span>
+              <span id="max-level" class="max-value">1</span>
             </div>
           </div>
         </div>
