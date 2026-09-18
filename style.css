@@ -416,23 +416,6 @@ body::before {
   z-index: 1;
 }
 
-.constellation {
-  position: absolute;
-  width: 66px;
-  height: 66px;
-  fill: rgba(190, 250, 255, 0.9);
-  stroke: rgba(130, 240, 255, 0.55);
-  stroke-width: 1;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 4px rgba(90, 240, 255, 0.65));
-  opacity: 0.7;
-  pointer-events: none;
-}
-.constellation circle { stroke: none; }
-.constellation.c-tl { top: 10px; left: 12px; }
-.constellation.c-tr { top: 12px; right: 14px; }
-.constellation.c-br { bottom: 10px; right: 12px; }
-
 .overlay-content h2 {
   font-size: clamp(26px, 5vw, 38px);
   font-weight: 800;
@@ -478,9 +461,9 @@ body::before {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .stat {
@@ -517,6 +500,47 @@ body::before {
   white-space: nowrap;
 }
 
+.final-max {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+
+.final-slime-orb {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex: none;
+  border: 2px solid rgba(120, 240, 255, 0.55);
+  box-shadow: 0 0 14px rgba(0, 255, 255, 0.4), inset 0 0 8px rgba(0, 0, 0, 0.25);
+}
+
+.final-max-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.final-max-label {
+  font-size: clamp(6px, 1.1vw, 8px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(185, 212, 255, 0.6);
+}
+
+.final-max-name {
+  font-size: clamp(13px, 2.4vw, 17px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #e2f7ff;
+  text-shadow: 0 0 12px rgba(120, 240, 255, 0.5);
+}
+
 .final-collection {
   font-size: clamp(10px, 1.8vw, 13px);
   letter-spacing: 0.14em;
@@ -532,9 +556,47 @@ body::before {
   text-shadow: 0 0 10px rgba(120, 240, 255, 0.5);
 }
 
+.neon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  color: #d9f8ff;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 13px 40px;
+  border-radius: 999px;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.14), transparent 55%),
+    linear-gradient(160deg, rgba(22, 34, 78, 0.72), rgba(9, 11, 28, 0.78));
+  border: 1px solid rgba(120, 240, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 14px rgba(0, 255, 255, 0.35),
+    0 0 40px rgba(0, 200, 255, 0.18),
+    0 4px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.neon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 24px rgba(0, 255, 255, 0.55),
+    0 0 60px rgba(0, 200, 255, 0.3),
+    0 6px 22px rgba(0, 0, 0, 0.5);
+}
+
+.neon-btn:active {
+  transform: translateY(1px) scale(0.97);
+}
+
 .neon-btn.large {
-  padding: 16px 48px;
-  font-size: clamp(14px, 2.5vw, 16px);
+  padding: 15px 48px;
+  font-size: clamp(13px, 2.4vw, 15px);
 }
 
 @media (max-width: 480px) {

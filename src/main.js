@@ -35,9 +35,9 @@ const restartBtn = document.getElementById('restart-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
 const finalScoreEl = document.getElementById('final-score');
-const finalMaxLevelEl = document.getElementById('final-max-level');
 const finalBestEl = document.getElementById('final-best');
 const finalSlimeNameEl = document.getElementById('final-slime-name');
+const finalSlimeOrbEl = document.getElementById('final-slime-orb');
 const finalMergesEl = document.getElementById('final-merges');
 const finalComboEl = document.getElementById('final-combo');
 const finalTimeEl = document.getElementById('final-time');
@@ -1211,9 +1211,10 @@ function triggerGameOver() {
   const secs = elapsed % 60;
 
   finalScoreEl.textContent = score.toLocaleString();
-  finalMaxLevelEl.textContent = maxLevelReached;
+  const topConfig = getSlimeConfig(maxLevelReached);
+  if (finalSlimeOrbEl) stylePreviewElement(finalSlimeOrbEl, topConfig, 46, true);
+  if (finalSlimeNameEl) finalSlimeNameEl.textContent = topConfig.name;
   if (finalBestEl) finalBestEl.textContent = highScore.toLocaleString();
-  if (finalSlimeNameEl) finalSlimeNameEl.textContent = getSlimeConfig(maxLevelReached).name;
   if (finalMergesEl) finalMergesEl.textContent = totalMerges.toLocaleString();
   if (finalComboEl) finalComboEl.textContent = `×${bestCombo}`;
   if (finalTimeEl) finalTimeEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
