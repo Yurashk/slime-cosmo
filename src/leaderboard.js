@@ -28,7 +28,6 @@ function buildDom() {
   root.id = 'leaderboard';
   root.className = 'leaderboard hidden';
   root.innerHTML = `
-    <div class="leaderboard-head">LEADERBOARD</div>
     <div class="leaderboard-body">
       <div class="lb-rows"></div>
       <div class="lb-more hidden">•••</div>

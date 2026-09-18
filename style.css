@@ -808,18 +808,6 @@ body::before {
   display: none;
 }
 
-.leaderboard-head {
-  font-family: 'Courier New', monospace;
-  font-size: clamp(9px, 1.6vw, 11px);
-  font-weight: 800;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 10px rgba(0, 210, 255, 0.8);
-  margin-bottom: 8px;
-  white-space: nowrap;
-}
-
 .lb-rows {
   display: flex;
   flex-direction: column;
@@ -939,8 +927,5 @@ body::before {
     bottom: calc(10px + env(safe-area-inset-bottom));
     min-width: 150px;
     padding: 8px 10px 10px;
-  }
-  .leaderboard-head {
-    font-size: 9px;
   }
 }

@@ -1011,7 +1011,7 @@ function handleCosmicAttraction() {
           tentacles.push({ a, b, key, phase: Math.random() * 100, color: lightenColor(a.config.color, 25) });
         }
 
-        if (gap <= MERGE_OVERLAP_GAP * layoutScale) {
+        if (gap <= MERGE_OVERLAP_GAP * Math.max(1, layoutScale)) {
           performMerge(a, b);
           return;
         }
