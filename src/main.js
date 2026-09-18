@@ -11,6 +11,7 @@ import {
   hslToHex
 } from './SlimeConfig.js';
 import { createGameOverBg } from './gameOverBg.js';
+import { startLeaderboard, reportScore, leaderboardGameOver, leaderboardRestart } from './leaderboard.js';
 
 const {
   Engine, Runner, Bodies, Body, Composite,
@@ -454,6 +455,7 @@ function init() {
   spawnNextSlime();
   updatePreview();
   updateHighScoreUI();
+  startLeaderboard();
   requestAnimationFrame(gameLoop);
 }
 
@@ -1113,6 +1115,7 @@ function performMerge(a, b) {
   const isNewUnlock = newLevel > maxLevelReached;
   maxLevelReached = Math.max(maxLevelReached, newLevel);
   updateUI();
+  reportScore(score);
   if (isNewUnlock && isSpecialLevel(newLevel)) triggerUnlock(newLevel);
 
   applyBlastWave(anchorX, midY, level + 1);
@@ -1284,6 +1287,7 @@ function triggerGameOver() {
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
   gameOverBg.start();
+  leaderboardGameOver(score);
 }
 
 function restartGame() {
@@ -1339,6 +1343,7 @@ function restartGame() {
   nextSlimeHud.classList.remove('hidden');
   updateUI();
   updateHighScoreUI();
+  leaderboardRestart();
 }
 
 function updateMergeEffects() {
