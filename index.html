@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#080810">
   <title>Neon Slime Balance</title>
-  <script type="module" crossorigin src="/slime-cosmo/assets/index-CeOFPNDT.js"></script>
-  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-D7tgbZ1y.css">
+  <script type="module" crossorigin src="/slime-cosmo/assets/index-Czr0IbMA.js"></script>
+  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-6QdKMfXN.css">
 </head>
 <body>
   <div class="game-container">
@@ -17,24 +17,23 @@
         <div id="drop-zone-indicator" class="drop-zone-indicator"></div>
         
         <div id="hud" class="hud">
-          <div class="hud-left">
-            <div class="glass-panel score-panel">
-              <span class="score-label">SCORE</span>
+          <div class="glass-panel hud-bar" role="status" aria-live="polite">
+            <div class="hud-stat">
+              <span class="score-label">Score</span>
               <span id="score" class="score-value">0</span>
-              <i class="panel-line"></i>
-              <div class="best-row">
-                <span class="best-label">BEST</span>
-                <span id="high-score" class="best-value">0</span>
-              </div>
             </div>
-          </div>
-          <div class="hud-right">
-            <button id="restart-btn" class="restart-btn">⟳</button>
-            <div class="glass-panel max-panel">
-              <span class="max-label">MAX LV</span>
+            <i class="panel-line"></i>
+            <div class="hud-stat">
+              <span class="best-label">Best</span>
+              <span id="high-score" class="best-value">0</span>
+            </div>
+            <i class="panel-line"></i>
+            <div class="hud-stat hud-stat-max">
+              <span class="max-label">Max Lv</span>
               <span id="max-level" class="max-value">1</span>
             </div>
           </div>
+          <button id="restart-btn" class="restart-btn" aria-label="Restart">⟳</button>
         </div>
 
         <div id="next-slime-hud" class="next-slime-hud">
