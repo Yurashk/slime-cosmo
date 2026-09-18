@@ -125,8 +125,7 @@ const MERGE_SPAWN_COOLDOWN = 400;
 const MERGE_SPAWN_START_SCALE = 0.6;
 const MAX_SLIME_KICK = 3.5;
 const MAX_SLIME_SPEED = 12;
-const ACCESSORIES = ['horns', 'catEars', 'glasses'];
-const GLASSES_COLOR = '#9aa3b5';
+const ACCESSORIES = ['horns', 'catEars'];
 const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
 const COMBO_WINDOW = 1500;
@@ -2520,6 +2519,17 @@ function drawAmbientParticles(ctx, now) {
   ctx.restore();
 }
 
+function slimeBlinkAmount(seed, now) {
+  const period = 5000 + seededRnd(seed, 7) * 2000;
+  const cycle = (now + seededRnd(seed, 8) * 4000) % period;
+  const blinkLen = 140;
+  if (cycle > period - blinkLen) {
+    const t = (cycle - (period - blinkLen)) / blinkLen;
+    return Math.sin(Math.PI * t);
+  }
+  return 0;
+}
+
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const eyeY = -sizeY * 0.05;
   const eyeSpacing = sizeX * 0.28;
@@ -2551,12 +2561,19 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
+  const blink = slimeBlinkAmount(slime.seed, now);
+  const eyeScaleY = 1 - 0.9 * blink;
+
   for (const s of [-1, 1]) {
     const ex = s * eyeSpacing * 0.5 + lx * eyeSpacing * 0.15;
     const ey = eyeY + ly * eyeSpacing * 0.15;
 
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.scale(1, eyeScaleY);
+
     ctx.beginPath();
-    ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
+    ctx.arc(0, 0, eyeR, 0, Math.PI * 2);
     ctx.fillStyle = SCLERA;
     ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
     ctx.shadowBlur = 4;
@@ -2566,8 +2583,8 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     ctx.strokeStyle = RIM;
     ctx.stroke();
 
-    const px = ex + lx * eyeR * 0.4;
-    const py = ey + ly * eyeR * 0.4;
+    const px = lx * eyeR * 0.4;
+    const py = ly * eyeR * 0.4;
     ctx.beginPath();
     ctx.arc(px, py, eyeR * 0.55, 0, Math.PI * 2);
     ctx.fillStyle = PUPIL;
@@ -2576,6 +2593,19 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     ctx.arc(px + eyeR * 0.18, py - eyeR * 0.18, eyeR * 0.17, 0, Math.PI * 2);
     ctx.fillStyle = SCLERA;
     ctx.fill();
+
+    ctx.restore();
+
+    if (blink > 0.35) {
+      const lidH = eyeR * (blink - 0.35) * 4.2;
+      ctx.beginPath();
+      ctx.moveTo(ex - eyeR * 1.02, ey - eyeR * 0.55);
+      ctx.quadraticCurveTo(ex, ey - eyeR * 0.55 - lidH, ex + eyeR * 1.02, ey - eyeR * 0.55);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.lineWidth = Math.max(1, eyeR * 0.18);
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
@@ -2612,8 +2642,6 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
       ctx.closePath();
       ctx.fill();
     }
-  } else if (acc === 'glasses') {
-    drawGlasses(ctx, sizeX, sizeY);
   }
 
   ctx.restore();
@@ -2681,63 +2709,6 @@ function drawRoundHorns(ctx, r, glowColor) {
     ctx.beginPath();
     ctx.moveTo(rx + s * r * 0.03, ry - 2);
     ctx.quadraticCurveTo(rx + s * r * 0.2, ry - r * 0.18, tx - s * r * 0.04, ty + r * 0.04);
-    ctx.stroke();
-  }
-}
-
-function drawGlasses(ctx, sizeX, sizeY) {
-  const eyeY = -sizeY * 0.05;
-  const eyeSpacing = sizeX * 0.28;
-  const lensR = sizeX * 0.155;
-  const lensH = sizeY * 0.21;
-  const frameW = Math.max(1.2, sizeX * 0.02);
-
-  ctx.strokeStyle = GLASSES_COLOR;
-  ctx.fillStyle = GLASSES_COLOR;
-  ctx.shadowColor = 'rgba(170, 179, 196, 0.55)';
-
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 0.85;
-  ctx.lineWidth = Math.max(1, sizeX * 0.016);
-  for (const s of [-1, 1]) {
-    const outX = s * (eyeSpacing * 0.5 + lensR);
-    ctx.beginPath();
-    ctx.moveTo(outX, eyeY);
-    ctx.lineTo(outX + s * sizeX * 0.13, eyeY + sizeY * 0.05);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 6;
-
-  for (const s of [-1, 1]) {
-    const ex = s * eyeSpacing * 0.5;
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(ex - lensR, eyeY - lensH / 2, lensR * 2, lensH, lensH * 0.4);
-    } else {
-      ctx.rect(ex - lensR, eyeY - lensH / 2, lensR * 2, lensH);
-    }
-    ctx.globalAlpha = 0.13;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = frameW;
-    ctx.stroke();
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(-eyeSpacing * 0.5 + lensR, eyeY);
-  ctx.lineTo(eyeSpacing * 0.5 - lensR, eyeY);
-  ctx.lineWidth = frameW;
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = Math.max(0.9, sizeX * 0.014);
-  for (const s of [-1, 1]) {
-    const ex = s * eyeSpacing * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(ex - lensR * 0.7, eyeY - lensH * 0.14);
-    ctx.lineTo(ex + lensR * 0.4, eyeY + lensH * 0.1);
     ctx.stroke();
   }
 }
