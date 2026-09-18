@@ -49,6 +49,7 @@ const goFrame = document.querySelector('#game-over-overlay .overlay-content');
 let engine, runner;
 let bowlBody, bowlBottom, bowlLeft, bowlRight;
 let slimes = [];
+const slimeByBody = new Map();
 let nextSlimeConfig = null;
 let currentPreviewConfig = null;
 let score = 0;
@@ -799,6 +800,7 @@ function dropSlime() {
   const dropY = Math.max(50, canvasRect.height * 0.16);
 
   const slime = createSlime(dropX, dropY, currentPreviewConfig);
+  slimeByBody.set(slime.body, slime);
   slimes.push(slime);
   Composite.add(engine.world, slime.body);
 
@@ -874,10 +876,12 @@ function dampenSlimeSpin() {
   }
 }
 
-function bodySupport(body, dir) {
+function bodySupport(body, nx, ny) {
   let best = -Infinity;
+  const px = body.position.x;
+  const py = body.position.y;
   for (const v of body.vertices) {
-    const d = (v.x - body.position.x) * dir.x + (v.y - body.position.y) * dir.y;
+    const d = (v.x - px) * nx + (v.y - py) * ny;
     if (d > best) best = d;
   }
   return best;
@@ -895,7 +899,7 @@ function bodyTid(body) {
   return body.plugin.tid;
 }
 
-const tentacleKeyOf = (a, b) => bodyTid(a.body) + '_' + bodyTid(b.body);
+const tentacleKeyOf = (a, b) => bodyTid(a.body) * 1048576 + bodyTid(b.body);
 
 function bowlSafeHalfWidth(y) {
   const span = bowlYBottom - bowlYTop;
@@ -951,8 +955,8 @@ function handleCosmicAttraction() {
   // Sync tentacles: remove dead entries
   for (let i = tentacles.length - 1; i >= 0; i--) {
     const t = tentacles[i];
-    const aAlive = !t.a.body.isRemoved && slimes.includes(t.a);
-    const bAlive = !t.b.body.isRemoved && slimes.includes(t.b);
+    const aAlive = !t.a.body.isRemoved && slimeByBody.get(t.a.body) === t.a;
+    const bAlive = !t.b.body.isRemoved && slimeByBody.get(t.b.body) === t.b;
     if (!aAlive || !bAlive) {
       tentacles.splice(i, 1);
       continue;
@@ -961,8 +965,10 @@ function handleCosmicAttraction() {
     const dy = t.b.body.position.y - t.a.body.position.y;
     const dist = Math.hypot(dx, dy);
     if (dist < 1) { tentacles.splice(i, 1); continue; }
-    const dhat = { x: dx / dist, y: dy / dist };
-    const gap = dist - bodySupport(t.a.body, dhat) - bodySupport(t.b.body, { x: -dhat.x, y: -dhat.y });
+    const inv = 1 / dist;
+    const nx = dx * inv;
+    const ny = dy * inv;
+    const gap = dist - bodySupport(t.a.body, nx, ny) - bodySupport(t.b.body, -nx, -ny);
     if (gap > TENTACLE_RANGE * layoutScale + 1) {
       tentacles.splice(i, 1);
     }
@@ -991,9 +997,9 @@ function handleCosmicAttraction() {
 
       const dist = Math.hypot(dx, dy);
       if (dist < 1) continue;
-      const dhat = { x: dx / dist, y: dy / dist };
-      const supportA = bodySupport(a.body, dhat);
-      const supportB = bodySupport(b.body, { x: -dhat.x, y: -dhat.y });
+      const inv = 1 / dist;
+      const supportA = bodySupport(a.body, dx * inv, dy * inv);
+      const supportB = bodySupport(b.body, -dx * inv, -dy * inv);
       const gap = dist - supportA - supportB;
 
       if (gap <= TENTACLE_RANGE * layoutScale) {
@@ -1013,10 +1019,17 @@ function handleCosmicAttraction() {
 }
 
 function findSlimeByBody(body) {
-  for (const slime of slimes) {
-    if (slime.body === body) return slime;
+  return slimeByBody.get(body) || null;
+}
+
+function removeSlimeByIdentity(target) {
+  for (let i = slimes.length - 1; i >= 0; i--) {
+    if (slimes[i] === target) {
+      slimes.splice(i, 1);
+      break;
+    }
   }
-  return null;
+  slimeByBody.delete(target.body);
 }
 
 function handleLandingSquish(pair) {
@@ -1059,9 +1072,10 @@ function performMerge(a, b) {
   const bodyA = a.body;
   const bodyB = b.body;
 
+  removeSlimeByIdentity(a);
+  removeSlimeByIdentity(b);
   Composite.remove(engine.world, bodyA);
   Composite.remove(engine.world, bodyB);
-  slimes = slimes.filter(s => s.body !== bodyA && s.body !== bodyB);
 
   createMergeEffect(anchorX, midY, config);
 
@@ -1073,6 +1087,7 @@ function performMerge(a, b) {
   newSlime.bodyScale = MERGE_SPAWN_START_SCALE;
   newSlime.mergedScale = MERGE_SPAWN_START_SCALE;
   Body.scale(newSlime.body, MERGE_SPAWN_START_SCALE, MERGE_SPAWN_START_SCALE);
+  slimeByBody.set(newSlime.body, newSlime);
   slimes.push(newSlime);
   Composite.add(engine.world, newSlime.body);
 
@@ -1268,6 +1283,7 @@ function restartGame() {
   gameStartTime = performance.now();
   gameOverBg.stop();
   slimes = [];
+  slimeByBody.clear();
   mergeEffects.length = 0;
   tentacles.length = 0;
   ambientParticles.length = 0;
@@ -1331,7 +1347,12 @@ function updateMergeEffects() {
       p.vy *= 0.98;
       p.life -= p.decay;
     }
-    effect.particles = effect.particles.filter(p => p.life > 0);
+    const parts = effect.particles;
+    let w = 0;
+    for (let k = 0; k < parts.length; k++) {
+      if (parts[k].life > 0) parts[w++] = parts[k];
+    }
+    parts.length = w;
 
     if (progress >= 1 && effect.particles.length === 0) {
       mergeEffects.splice(i, 1);
@@ -1351,9 +1372,12 @@ function updateSlimesVisual() {
       if (progress < 1) {
         const ratio = target / slime.bodyScale;
         if (Math.abs(ratio - 1) > 1e-4) {
-          Body.scale(slime.body, ratio, ratio);
+          slime.scaleFrame = (slime.scaleFrame || 0) + 1;
+          if (slime.scaleFrame % 3 === 0) {
+            Body.scale(slime.body, ratio, ratio);
+            slime.bodyScale = target;
+          }
         }
-        slime.bodyScale = target;
       }
       slime.mergedScale = target;
 
@@ -1741,8 +1765,8 @@ function drawTentacles(ctx, now) {
     if (dist < 1) continue;
     dx /= dist; dy /= dist;
 
-    const supportA = bodySupport(t.a.body, { x: dx, y: dy });
-    const supportB = bodySupport(t.b.body, { x: -dx, y: -dy });
+    const supportA = bodySupport(t.a.body, dx, dy);
+    const supportB = bodySupport(t.b.body, -dx, -dy);
     const fx = ax + dx * supportA, fy = ay + dy * supportA;
     const tx = bx - dx * supportB, ty = by - dy * supportB;
     const gap = Math.hypot(tx - fx, ty - fy);
