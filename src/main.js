@@ -10,6 +10,7 @@ import {
   getCollectionName,
   hslToHex
 } from './SlimeConfig.js';
+import { createGameOverBg } from './gameOverBg.js';
 
 const {
   Engine, Runner, Bodies, Body, Composite,
@@ -35,6 +36,15 @@ const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
 const finalScoreEl = document.getElementById('final-score');
 const finalMaxLevelEl = document.getElementById('final-max-level');
+const finalBestEl = document.getElementById('final-best');
+const finalSlimeNameEl = document.getElementById('final-slime-name');
+const finalMergesEl = document.getElementById('final-merges');
+const finalComboEl = document.getElementById('final-combo');
+const finalTimeEl = document.getElementById('final-time');
+const finalCollectionEl = document.getElementById('final-collection');
+const newRecordEl = document.getElementById('new-record');
+const goCanvas = document.getElementById('go-canvas');
+const goFrame = document.querySelector('#game-over-overlay .overlay-content');
 
 let engine, runner;
 let bowlBody, bowlBottom, bowlLeft, bowlRight;
@@ -69,8 +79,22 @@ let collectionLayoutKey = -1;
 let collectionLayout = [];
 let unlockFly = null;
 let slotReveal = null;
+let totalMerges = 0;
+let bestCombo = 0;
+let totalDrops = 0;
+let gameStartTime = 0;
+let gameEndTime = 0;
+let isNewRecord = false;
+const PLANET_TOTAL = 9;
 const COLLECTION_GAP = 6;
 const COLLECTION_ARC = 0.24;
+
+const gameOverBg = createGameOverBg(goCanvas, () => {
+  if (!goFrame || !goCanvas) return { x: 0, y: 0, w: 0, h: 0 };
+  const c = goCanvas.getBoundingClientRect();
+  const b = goFrame.getBoundingClientRect();
+  return { x: b.left - c.left, y: b.top - c.top, w: b.width, h: b.height };
+});
 
 const BOWL_WIDTH = 480;
 const BOWL_HEIGHT = 300;
@@ -421,6 +445,7 @@ function init() {
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
   Events.on(engine, 'afterUpdate', containSlimes);
+  gameStartTime = performance.now();
   spawnNextSlime();
   updatePreview();
   updateHighScoreUI();
@@ -762,6 +787,7 @@ function dropSlime() {
   const now = performance.now();
   if (now - lastDropTime < DROP_COOLDOWN) return;
   lastDropTime = now;
+  totalDrops += 1;
 
   const centerX = canvasRect.width / 2;
   const dropX = clampDropX(renderPreviewX != null ? renderPreviewX : centerX);
@@ -1033,6 +1059,8 @@ function performMerge(a, b) {
     comboCount = 1;
   }
   lastComboAt = nowMs;
+  totalMerges += 1;
+  if (comboCount > bestCombo) bestCombo = comboCount;
   if (comboCount >= 2) {
     comboShownUntil = nowMs + COMBO_DISPLAY_TIME;
   }
@@ -1172,22 +1200,48 @@ function checkGameOver() {
 function triggerGameOver() {
   isGameOver = true;
   Runner.stop(runner);
-  if (score > highScore) {
+  gameEndTime = performance.now();
+  isNewRecord = score > highScore;
+  if (isNewRecord) {
     highScore = score;
     localStorage.setItem('neon-slime-highscore', highScore.toString());
   }
+  const elapsed = Math.max(0, Math.round((gameEndTime - gameStartTime) / 1000));
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+
   finalScoreEl.textContent = score.toLocaleString();
   finalMaxLevelEl.textContent = maxLevelReached;
+  if (finalBestEl) finalBestEl.textContent = highScore.toLocaleString();
+  if (finalSlimeNameEl) finalSlimeNameEl.textContent = getSlimeConfig(maxLevelReached).name;
+  if (finalMergesEl) finalMergesEl.textContent = totalMerges.toLocaleString();
+  if (finalComboEl) finalComboEl.textContent = `×${bestCombo}`;
+  if (finalTimeEl) finalTimeEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+  if (finalCollectionEl) {
+    finalCollectionEl.textContent = `${Math.min(PLANET_TOTAL, Math.max(0, maxLevelReached - 5))} / ${PLANET_TOTAL}`;
+  }
+  if (newRecordEl) {
+    if (isNewRecord) newRecordEl.classList.remove('hidden');
+    else newRecordEl.classList.add('hidden');
+  }
+
   comboShownUntil = 0;
   nextSlimeHud.classList.add('hidden');
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
+  gameOverBg.start();
 }
 
 function restartGame() {
   isGameOver = false;
   score = 0;
   maxLevelReached = 1;
+  totalMerges = 0;
+  bestCombo = 0;
+  totalDrops = 0;
+  isNewRecord = false;
+  gameStartTime = performance.now();
+  gameOverBg.stop();
   slimes = [];
   mergeEffects.length = 0;
   tentacles.length = 0;

@@ -57,10 +57,41 @@
   </div>
 
   <div id="game-over-overlay" class="overlay hidden">
+    <canvas id="go-canvas" class="overlay-bg" aria-hidden="true"></canvas>
     <div class="overlay-content">
+      <svg class="constellation c-tl" viewBox="0 0 80 80" aria-hidden="true">
+        <polyline points="10,54 26,36 44,42 58,20 72,28" />
+        <circle cx="10" cy="54" r="1.8" /><circle cx="26" cy="36" r="2.4" />
+        <circle cx="44" cy="42" r="1.7" /><circle cx="58" cy="20" r="2.6" />
+        <circle cx="72" cy="28" r="1.6" />
+      </svg>
+      <svg class="constellation c-br" viewBox="0 0 80 80" aria-hidden="true">
+        <polyline points="8,24 24,40 40,32 56,52 74,44" />
+        <circle cx="8" cy="24" r="1.8" /><circle cx="24" cy="40" r="2.2" />
+        <circle cx="40" cy="32" r="1.6" /><circle cx="56" cy="52" r="2.5" />
+        <circle cx="74" cy="44" r="1.7" />
+      </svg>
+      <svg class="constellation c-tr" viewBox="0 0 80 80" aria-hidden="true">
+        <polyline points="16,18 34,26 30,46 52,56 66,44" />
+        <circle cx="16" cy="18" r="2" /><circle cx="34" cy="26" r="1.6" />
+        <circle cx="30" cy="46" r="2.3" /><circle cx="52" cy="56" r="1.7" />
+        <circle cx="66" cy="44" r="2" />
+      </svg>
+
       <h2 class="neon-text">GAME OVER</h2>
+      <div id="new-record" class="new-record hidden">★ NEW RECORD ★</div>
       <p class="final-score">Final Score: <span id="final-score">0</span></p>
-      <p class="max-level-reached">Max Level: <span id="final-max-level">1</span></p>
+
+      <div class="stats-grid">
+        <div class="stat"><span class="stat-label">Best</span><span id="final-best" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Max Lv</span><span id="final-max-level" class="stat-value">1</span></div>
+        <div class="stat"><span class="stat-label">Slime</span><span id="final-slime-name" class="stat-value">—</span></div>
+        <div class="stat"><span class="stat-label">Merges</span><span id="final-merges" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Best Combo</span><span id="final-combo" class="stat-value">×0</span></div>
+        <div class="stat"><span class="stat-label">Time</span><span id="final-time" class="stat-value">0:00</span></div>
+      </div>
+
+      <p class="final-collection">Collection <span id="final-collection">0 / 9</span></p>
       <button id="play-again-btn" class="neon-btn large">PLAY AGAIN</button>
     </div>
   </div>
