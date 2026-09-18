@@ -1,7 +1,7 @@
 import { getFirestoreModule, getAnonymousUid, initFirebaseAnalytics } from './firebase.js';
 
 const COLLECTION = 'leaderboard';
-const REFRESH_MS = 10000;
+const REFRESH_MS = 60000;
 const WRITE_DEBOUNCE_MS = 1200;
 
 const state = {
