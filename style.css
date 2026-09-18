@@ -600,6 +600,15 @@ body::before {
 }
 
 @media (max-width: 480px) {
+  .game-main {
+    padding: 0;
+  }
+  .canvas-wrapper {
+    max-width: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.6);
+  }
   .score-panel {
     padding: 6px 10px 7px;
   }
