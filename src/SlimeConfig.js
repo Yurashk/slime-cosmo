@@ -9,7 +9,7 @@ export const GOLDEN_LEVEL = 9;
 const LEVEL_THEMES = {
   1: { color: '#00e8ff', glow: '#5af0ff' }, // starter (neon cyan accent)
   2: { color: '#14ff62', glow: '#74ff90' }, // Neon Green
-  3: { color: '#b6ff30', glow: '#e8ff6d' }, // Lime
+  3: { color: '#ffdf1f', glow: '#fff07a' }, // Yellow
   4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
   5: { color: '#ff3399', glow: '#ff7ec9' } // Hot Pink
 };
