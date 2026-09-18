@@ -115,6 +115,8 @@ const nebulas = [];
 const cosmicDust = [];
 const tentacles = [];
 const ambientParticles = [];
+let nextTid = 1;
+let collectionTick = false;
 const lowPower = typeof navigator !== 'undefined' && (navigator.hardwareConcurrency || 0) > 0 && navigator.hardwareConcurrency <= 4;
 const TENTACLE_RANGE = 15;
 const MERGE_OVERLAP_GAP = 1.5;
@@ -363,6 +365,8 @@ function updateCollectionBar() {
     collectionLayout = computeCollectionLayout();
     collectionLayoutKey = maxLevelReached;
   }
+  collectionTick = !collectionTick;
+  if (collectionTick) return;
   g.clearRect(0, 0, cssW, cssH);
   if (collectionLayout.length === 0) return;
   const target = collectionEyeTarget();
@@ -433,9 +437,9 @@ function init() {
   engine = Engine.create();
   engine.world.gravity.y = 0.9;
   engine.world.gravity.x = 0;
-  engine.positionIterations = 18;
-  engine.velocityIterations = 18;
-  engine.constraintIterations = 14;
+  engine.positionIterations = 10;
+  engine.velocityIterations = 8;
+  engine.constraintIterations = 2;
 
   runner = Runner.create();
   Runner.run(runner, engine);
@@ -517,7 +521,7 @@ function createStars() {
     sg.fillStyle = star.color;
     sg.globalAlpha = star.baseAlpha * 0.8;
     sg.shadowColor = star.color;
-    sg.shadowBlur = 6 + star.radius * 3;
+    sg.shadowBlur = 4 + star.radius * 2;
     sg.fill();
     sg.restore();
   }
@@ -879,6 +883,20 @@ function bodySupport(body, dir) {
   return best;
 }
 
+function bodyReachRadius(body) {
+  const b = body.bounds;
+  const ex = (b.max.x - b.min.x) * 0.5;
+  const ey = (b.max.y - b.min.y) * 0.5;
+  return Math.hypot(ex, ey);
+}
+
+function bodyTid(body) {
+  if (body.plugin.tid === undefined) body.plugin.tid = nextTid++;
+  return body.plugin.tid;
+}
+
+const tentacleKeyOf = (a, b) => bodyTid(a.body) + '_' + bodyTid(b.body);
+
 function bowlSafeHalfWidth(y) {
   const span = bowlYBottom - bowlYTop;
   if (span <= 0) return bowlHalfTop;
@@ -950,6 +968,9 @@ function handleCosmicAttraction() {
     }
   }
 
+  const tentacleKeys = new Set();
+  for (const t of tentacles) tentacleKeys.add(t.key);
+
   for (let i = 0; i < slimes.length; i++) {
     const a = slimes[i];
     if (a.body.isRemoved) continue;
@@ -965,6 +986,9 @@ function handleCosmicAttraction() {
 
       const dx = b.body.position.x - a.body.position.x;
       const dy = b.body.position.y - a.body.position.y;
+      const reach = bodyReachRadius(a.body) + bodyReachRadius(b.body) + TENTACLE_RANGE * layoutScale;
+      if (dx * dx + dy * dy > reach * reach) continue;
+
       const dist = Math.hypot(dx, dy);
       if (dist < 1) continue;
       const dhat = { x: dx / dist, y: dy / dist };
@@ -973,11 +997,10 @@ function handleCosmicAttraction() {
       const gap = dist - supportA - supportB;
 
       if (gap <= TENTACLE_RANGE * layoutScale) {
-        const alreadyHas = tentacles.some(
-          t => (t.a === a && t.b === b) || (t.a === b && t.b === a)
-        );
-        if (!alreadyHas) {
-          tentacles.push({ a, b, phase: Math.random() * 100, color: lightenColor(a.config.color, 25) });
+        const key = tentacleKeyOf(a, b);
+        if (!tentacleKeys.has(key)) {
+          tentacleKeys.add(key);
+          tentacles.push({ a, b, key, phase: Math.random() * 100, color: lightenColor(a.config.color, 25) });
         }
 
         if (gap <= MERGE_OVERLAP_GAP * layoutScale) {
@@ -1266,9 +1289,9 @@ function restartGame() {
   engine = Engine.create();
   engine.world.gravity.y = 0.9;
   engine.world.gravity.x = 0;
-  engine.positionIterations = 18;
-  engine.velocityIterations = 18;
-  engine.constraintIterations = 14;
+  engine.positionIterations = 10;
+  engine.velocityIterations = 8;
+  engine.constraintIterations = 2;
 
   runner.engine = engine;
   Runner.run(runner, engine);
@@ -1463,10 +1486,10 @@ function drawComboOverlay(ctx, now) {
   ctx.textBaseline = 'middle';
   ctx.font = `800 ${28 * layoutScale}px 'Segoe UI', 'Arial', sans-serif`;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 18 * layoutScale;
+  ctx.shadowBlur = 12 * layoutScale;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(`COMBO x${comboCount}`, 0, 0);
-  ctx.shadowBlur = 34 * layoutScale;
+  ctx.shadowBlur = 22 * layoutScale;
   ctx.fillStyle = color;
   ctx.globalAlpha = Math.max(0, fade) * 0.55;
   ctx.fillText(`COMBO x${comboCount}`, 0, 0);
@@ -1564,7 +1587,7 @@ function drawStars(ctx, now) {
     ctx.fillStyle = star.color;
     ctx.globalAlpha = star.baseAlpha * (0.5 + 0.5 * twinkle);
     ctx.shadowColor = star.color;
-    ctx.shadowBlur = 6 + star.radius * 3;
+    ctx.shadowBlur = 4 + star.radius * 2;
     ctx.fill();
     ctx.restore();
   }
@@ -1630,7 +1653,7 @@ function drawBowl(ctx) {
   ctx.strokeStyle = '#00f0ff';
   ctx.lineWidth = 3;
   ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 18 + 10 * pulse;
+  ctx.shadowBlur = 10 + 6 * pulse;
   ctx.globalAlpha = 0.7 + 0.3 * pulse;
   ctx.stroke();
 
@@ -1639,14 +1662,14 @@ function drawBowl(ctx) {
   ctx.lineTo(centerX + bt, yT);
   ctx.strokeStyle = `rgba(170, 245, 255, ${0.8 + 0.2 * pulse})`;
   ctx.lineWidth = 4.5;
-  ctx.shadowBlur = 26 + 12 * pulse;
+  ctx.shadowBlur = 14 + 7 * pulse;
   ctx.stroke();
 
   trace(slab);
   ctx.globalAlpha = 0.45;
   ctx.strokeStyle = 'rgba(0, 170, 240, 0.7)';
   ctx.lineWidth = 1.5;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 5;
   ctx.stroke();
 
   ctx.save();
@@ -1675,7 +1698,7 @@ function drawMergeEffects(ctx) {
     ctx.lineWidth = 3;
     ctx.globalAlpha = effect.shockwave.alpha * 0.7;
     ctx.shadowColor = effect.color;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 12;
     ctx.stroke();
 
     ctx.beginPath();
@@ -1688,7 +1711,7 @@ function drawMergeEffects(ctx) {
     ctx.fillStyle = flashGrad;
     ctx.globalAlpha = effect.flash.alpha * 0.5;
     ctx.shadowColor = effect.color;
-    ctx.shadowBlur = 30;
+    ctx.shadowBlur = 18;
     ctx.fill();
 
     for (const p of effect.particles) {
@@ -1697,7 +1720,7 @@ function drawMergeEffects(ctx) {
       ctx.fillStyle = p.color;
       ctx.globalAlpha = p.life * 0.9;
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 5;
       ctx.fill();
     }
 
@@ -1739,13 +1762,13 @@ function drawTentacles(ctx, now) {
       ctx.globalAlpha = 0.6 + 0.2 * pulse;
       ctx.lineWidth = width;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = 4;
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(ex, ey, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.globalAlpha = 0.85 * pulse;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 6;
       ctx.fill();
     };
 
@@ -1792,7 +1815,7 @@ function drawSlimes(ctx, now) {
       glowColor = hslToHex(hue, 100, 65);
       strokeColor = hslToHex(hue, 100, 75);
     }
-    const glowBlur = (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale);
+    const glowBlur = Math.min(32, (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale));
 
     const opacity = slime.opacity !== undefined ? slime.opacity : 1;
 
@@ -1907,7 +1930,7 @@ function drawAura(ctx, config, r, now, opacity, glowColor) {
     ctx.arc(mx, my, Math.max(1.2, r * 0.055), 0, Math.PI * 2);
     ctx.fillStyle = glowColor;
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 5;
     ctx.fill();
   }
   ctx.restore();
@@ -1978,7 +2001,7 @@ function drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, g
   ctx.lineCap = 'round';
   ctx.lineWidth = Math.max(1.5, R * 0.055);
   ctx.shadowColor = p.rim;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 6;
   ctx.beginPath();
   ctx.arc(0, 0, R - ctx.lineWidth * 0.5, Math.PI * 1.12, Math.PI * 1.66);
   ctx.stroke();
@@ -2013,7 +2036,7 @@ function drawPlanetRings(ctx, slime, config, R, now, opacity) {
     ctx.strokeStyle = ringColor;
     ctx.lineWidth = widths[i];
     ctx.shadowColor = p.rim;
-    ctx.shadowBlur = saturn ? 8 : 4;
+    ctx.shadowBlur = saturn ? 5 : 3;
     ctx.stroke();
   }
   ctx.restore();
@@ -2191,7 +2214,7 @@ function drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY) {
       const alpha = 0.4 + 0.32 * Math.max(0, Math.min(1, flick * 0.5 + 0.5));
       ctx.strokeStyle = `rgba(200, 235, 255, ${alpha})`;
       ctx.shadowColor = config.glowColor;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 6;
       ctx.lineWidth = Math.max(1.2, hw * 0.08);
       for (let b = 0; b < 3; b++) {
         const t0 = (now * 0.002 + slime.seed + b * 0.42) % 1;
@@ -2327,7 +2350,7 @@ function drawStyleDecor(ctx, slime, config, r, now, sizeX, sizeY) {
       ctx.globalAlpha = opacity * (0.55 + 0.25 * Math.sin(now * 0.008));
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 10;
       ctx.lineWidth = Math.max(1.5, hw * 0.07);
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
@@ -2412,7 +2435,7 @@ function drawAmbientParticles(ctx, now) {
     ctx.strokeStyle = p.color;
     ctx.fillStyle = p.color;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = p.size >= 2.2 ? 8 : 0;
+    ctx.shadowBlur = p.size >= 2.6 ? 5 : 0;
 
     switch (p.kind) {
       case 'streak': {
@@ -2496,7 +2519,7 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.fillStyle = SCLERA;
     ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
-    ctx.shadowBlur = 5;
+    ctx.shadowBlur = 4;
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.lineWidth = Math.max(1, eyeR * 0.12);
@@ -2526,7 +2549,7 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 6;
 
   if (acc === 'horns') {
     ctx.fillStyle = glowColor;
