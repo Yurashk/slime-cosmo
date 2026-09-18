@@ -2520,28 +2520,24 @@ function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
 function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
   const acc = slime.accessory;
   if (!acc) return;
-  const topY = -sizeY / 2;
 
   ctx.save();
-  ctx.strokeStyle = glowColor;
-  ctx.fillStyle = glowColor;
-  ctx.lineWidth = 2;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 9;
+  ctx.shadowBlur = 8;
 
   if (acc === 'horns') {
-    const hx = sizeX * 0.26, hy = sizeY * 0.17;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * hx, topY + 1);
-      ctx.lineTo(s * hx + s * sizeX * 0.11, topY - hy);
-      ctx.lineTo(s * hx + s * sizeX * 0.06, topY + 1);
-      ctx.closePath();
-      ctx.fill();
+    ctx.fillStyle = glowColor;
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 1.4;
+    if (slime.config.isPlanet) {
+      drawRoundHorns(ctx, sizeX / 2, glowColor);
+    } else {
+      drawSquareHorns(ctx, sizeX, sizeY, glowColor);
     }
   } else if (acc === 'catEars') {
+    const topY = -sizeY / 2;
     const hx = sizeX * 0.22, hy = sizeY * 0.17;
     for (const s of [-1, 1]) {
       const bx = s * hx;
@@ -2553,27 +2549,132 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
       ctx.fill();
     }
   } else if (acc === 'glasses') {
-    const eyeY = -sizeY * 0.05;
-    const eyeSpacing = sizeX * 0.28;
-    const gR = sizeX * 0.145;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeSpacing * 0.5, eyeY, gR, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.moveTo(-eyeSpacing * 0.5 + gR, eyeY);
-    ctx.lineTo(eyeSpacing * 0.5 - gR, eyeY);
-    ctx.stroke();
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * eyeSpacing * 0.5 + s * gR, eyeY);
-      ctx.lineTo(s * eyeSpacing * 0.5 + s * (gR + sizeX * 0.12), eyeY + sizeY * 0.05);
-      ctx.stroke();
-    }
+    drawGlasses(ctx, sizeX, sizeY, glowColor);
   }
 
   ctx.restore();
+}
+
+function drawSquareHorns(ctx, sizeX, sizeY, glowColor) {
+  const topY = -sizeY / 2;
+  const hx = sizeX * 0.27;
+  const hy = sizeY * 0.20;
+  const baseW = sizeX * 0.10;
+  for (const s of [-1, 1]) {
+    const bx = s * hx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(bx - s * baseW, topY + 1);
+    ctx.quadraticCurveTo(bx + s * sizeX * 0.02, topY - hy * 0.55, bx + s * sizeX * 0.18, topY - hy);
+    ctx.quadraticCurveTo(bx + s * sizeX * 0.10, topY - hy * 0.5, bx + s * baseW, topY + 1);
+    ctx.closePath();
+    ctx.fillStyle = glowColor;
+    ctx.fill();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(bx - sizeX * 0.2, topY - hy * 1.2, sizeX * 0.4, hy * 0.55);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(bx - sizeX * 0.2, topY - hy * 0.1, sizeX * 0.4, hy * 0.4);
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = Math.max(1, sizeX * 0.014);
+    ctx.beginPath();
+    ctx.moveTo(bx + s * baseW * 0.4, topY + 1);
+    ctx.quadraticCurveTo(bx + s * sizeX * 0.03, topY - hy * 0.5, bx + s * sizeX * 0.16, topY - hy * 0.92);
+    ctx.stroke();
+  }
+}
+
+function drawRoundHorns(ctx, r, glowColor) {
+  const rootA = 0.52;
+  for (const s of [-1, 1]) {
+    const rx = Math.sin(rootA) * r * s;
+    const ry = -Math.cos(rootA) * r + 1;
+    const tA = s * (rootA + 0.62);
+    const tx = Math.sin(tA) * r * 1.18;
+    const ty = -Math.cos(tA) * r * 1.18;
+    const span = tx - rx;
+    const base = ty < ry ? ty : ry;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(rx - s * r * 0.09, ry);
+    ctx.quadraticCurveTo(rx + s * r * 0.26, ry - r * 0.22, tx, ty);
+    ctx.quadraticCurveTo(rx + s * r * 0.14, ry - r * 0.08, rx + s * r * 0.09, ry);
+    ctx.closePath();
+    ctx.fillStyle = glowColor;
+    ctx.fill();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(base - r * 0.35, base, r * 0.7, r * 0.4);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(base - r * 0.35, base + r * 0.4, r * 0.7, r * 0.35);
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = Math.max(1, r * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(rx + s * r * 0.03, ry - 2);
+    ctx.quadraticCurveTo(rx + s * r * 0.2, ry - r * 0.18, tx - s * r * 0.04, ty + r * 0.04);
+    ctx.stroke();
+  }
+}
+
+function drawGlasses(ctx, sizeX, sizeY, glowColor) {
+  const eyeY = -sizeY * 0.05;
+  const eyeSpacing = sizeX * 0.28;
+  const lensR = sizeX * 0.155;
+  const lensH = sizeY * 0.21;
+  const frameW = Math.max(1.2, sizeX * 0.02);
+
+  ctx.strokeStyle = glowColor;
+  ctx.fillStyle = glowColor;
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = Math.max(1, sizeX * 0.016);
+  for (const s of [-1, 1]) {
+    const outX = s * (eyeSpacing * 0.5 + lensR);
+    ctx.beginPath();
+    ctx.moveTo(outX, eyeY);
+    ctx.lineTo(outX + s * sizeX * 0.13, eyeY + sizeY * 0.05);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 7;
+
+  for (const s of [-1, 1]) {
+    const ex = s * eyeSpacing * 0.5;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(ex - lensR, eyeY - lensH / 2, lensR * 2, lensH, lensH * 0.4);
+    } else {
+      ctx.rect(ex - lensR, eyeY - lensH / 2, lensR * 2, lensH);
+    }
+    ctx.globalAlpha = 0.13;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = frameW;
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(-eyeSpacing * 0.5 + lensR, eyeY);
+  ctx.lineTo(eyeSpacing * 0.5 - lensR, eyeY);
+  ctx.lineWidth = frameW;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = Math.max(0.9, sizeX * 0.014);
+  for (const s of [-1, 1]) {
+    const ex = s * eyeSpacing * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(ex - lensR * 0.7, eyeY - lensH * 0.14);
+    ctx.lineTo(ex + lensR * 0.4, eyeY + lensH * 0.1);
+    ctx.stroke();
+  }
 }
 
 function lightenColor(hex, percent) {
