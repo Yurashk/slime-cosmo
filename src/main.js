@@ -58,6 +58,9 @@ let targetX = null;
 let renderPreviewX = null;
 let dragOriginX = null;
 let dragStartPreviewX = 0;
+let touchActiveId = null;
+let lastTouchTime = -9999;
+const TOUCH_MOUSE_GUARD = 700;
 let comboCount = 0;
 let lastComboAt = -999999;
 let comboShownUntil = 0;
@@ -598,6 +601,7 @@ function setupEventListeners() {
   canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
   canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
   canvas.addEventListener('touchend', handleTouchEnd);
+  canvas.addEventListener('touchcancel', handleTouchCancel);
   window.addEventListener('keydown', handleKeyDown);
 
   restartBtn.addEventListener('click', restartGame);
@@ -606,41 +610,73 @@ function setupEventListeners() {
   Events.on(engine, 'collisionStart', handleCollisionStart);
 }
 
+function isSyntheticMouseBlocked() {
+  if (touchActiveId !== null) return true;
+  return performance.now() - lastTouchTime < TOUCH_MOUSE_GUARD;
+}
+
 function handleMouseMove(e) {
-  if (isGameOver) return;
+  if (isGameOver || isSyntheticMouseBlocked()) return;
   targetX = e.clientX - canvasRect.left;
   updatePreviewPosition();
 }
 
 function handleMouseDown(e) {
-  if (isGameOver) return;
+  if (isGameOver || isSyntheticMouseBlocked()) return;
   if (e.button === 0) dropSlime();
 }
 
-function handleTouchMove(e) {
-  if (isGameOver) return;
-  const touch = e.touches[0];
-  const x = touch.clientX - canvasRect.left;
-  if (dragOriginX !== null) {
-    targetX = dragStartPreviewX + (x - dragOriginX);
+function findTrackedTouch(list) {
+  if (touchActiveId === null) return null;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].identifier === touchActiveId) return list[i];
   }
-  updatePreviewPosition();
+  return null;
+}
+
+function touchEndedForTracked(changed) {
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].identifier === touchActiveId) return true;
+  }
+  return false;
 }
 
 function handleTouchStart(e) {
   if (isGameOver) return;
+  if (e.touches.length > 1) return;
   const touch = e.touches[0];
-  const x = touch.clientX - canvasRect.left;
-  dragOriginX = x;
+  touchActiveId = touch.identifier;
+  lastTouchTime = performance.now();
+  dragOriginX = touch.clientX - canvasRect.left;
   dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
   targetX = dragStartPreviewX;
   updatePreviewPosition();
 }
 
+function handleTouchMove(e) {
+  if (isGameOver) return;
+  lastTouchTime = performance.now();
+  const touch = findTrackedTouch(e.touches);
+  if (!touch || dragOriginX === null) return;
+  const x = touch.clientX - canvasRect.left;
+  targetX = dragStartPreviewX + (x - dragOriginX);
+  updatePreviewPosition();
+}
+
 function handleTouchEnd(e) {
+  lastTouchTime = performance.now();
+  if (touchActiveId === null) return;
+  if (!touchEndedForTracked(e.changedTouches)) return;
+  touchActiveId = null;
   dragOriginX = null;
   if (isGameOver) return;
   dropSlime();
+}
+
+function handleTouchCancel() {
+  lastTouchTime = performance.now();
+  touchActiveId = null;
+  dragOriginX = null;
 }
 
 function handleKeyDown(e) {
