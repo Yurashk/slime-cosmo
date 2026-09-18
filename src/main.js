@@ -2520,8 +2520,8 @@ function drawAmbientParticles(ctx, now) {
 }
 
 function slimeBlinkAmount(seed, now) {
-  const period = 5000 + seededRnd(seed, 7) * 2000;
-  const cycle = (now + seededRnd(seed, 8) * 4000) % period;
+  const period = 15000 + seededRnd(seed, 7) * 5000;
+  const cycle = (now + seededRnd(seed, 8) * 12000) % period;
   const blinkLen = 140;
   if (cycle > period - blinkLen) {
     const t = (cycle - (period - blinkLen)) / blinkLen;
