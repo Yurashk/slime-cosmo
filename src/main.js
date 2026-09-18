@@ -120,7 +120,7 @@ let nextTid = 1;
 let collectionTick = false;
 const lowPower = typeof navigator !== 'undefined' && (navigator.hardwareConcurrency || 0) > 0 && navigator.hardwareConcurrency <= 4;
 const TENTACLE_RANGE = 15;
-const MERGE_OVERLAP_GAP = 1.5;
+const MERGE_OVERLAP_GAP = 4;
 const MERGE_SPAWN_COOLDOWN = 400;
 const MERGE_SPAWN_START_SCALE = 0.6;
 const MAX_SLIME_KICK = 3.5;
@@ -639,6 +639,7 @@ function setupEventListeners() {
   playAgainBtn.addEventListener('click', restartGame);
 
   Events.on(engine, 'collisionStart', handleCollisionStart);
+  Events.on(engine, 'collisionActive', handleCollisionActive);
 }
 
 function isSyntheticMouseBlocked() {
@@ -1136,6 +1137,20 @@ function handleCollisionStart(event) {
   }
 }
 
+function handleCollisionActive(event) {
+  if (isGameOver) return;
+  for (const pair of event.pairs) {
+    const { bodyA, bodyB } = pair;
+    if (!bodyA.plugin?.slimeLevel || !bodyB.plugin?.slimeLevel) continue;
+    if (bodyA.plugin.slimeLevel !== bodyB.plugin.slimeLevel) continue;
+    const a = findSlimeByBody(bodyA);
+    const b = findSlimeByBody(bodyB);
+    if (!a || !b) continue;
+    performMerge(a, b);
+    break;
+  }
+}
+
 function createMergeEffect(x, y, config) {
   mergeEffects.push({
     x, y,
@@ -1315,6 +1330,7 @@ function restartGame() {
   createStars();
   createBowl();
   Events.on(engine, 'collisionStart', handleCollisionStart);
+  Events.on(engine, 'collisionActive', handleCollisionActive);
   Events.on(engine, 'afterUpdate', dampenSlimeSpin);
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
   Events.on(engine, 'afterUpdate', containSlimes);
