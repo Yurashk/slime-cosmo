@@ -30,18 +30,18 @@ function buildDom() {
   root.innerHTML = `
     <div class="leaderboard-body">
       <div class="lb-rows"></div>
-      <div class="lb-more hidden">•••</div>
       <div class="lb-me hidden">
-        <span class="lb-me-place"></span>
-        <span class="lb-me-name">Вы</span>
-        <span class="lb-me-score"></span>
+        <span class="lb-me-inner">
+          <span class="lb-me-place"></span>
+          <span class="lb-me-name">Вы</span>
+          <span class="lb-me-score"></span>
+        </span>
       </div>
       <div class="lb-status hidden"></div>
     </div>`;
   document.body.appendChild(root);
   els.wrap = root;
   els.rows = root.querySelector('.lb-rows');
-  els.more = root.querySelector('.lb-more');
   els.me = root.querySelector('.lb-me');
   els.mePlace = root.querySelector('.lb-me-place');
   els.meScore = root.querySelector('.lb-me-score');
@@ -75,7 +75,6 @@ function renderView() {
   });
 
   const meInTop = inTop3();
-  els.more.classList.toggle('hidden', meInTop || state.myRank == null || state.myRank <= 3);
   if (!meInTop) {
     els.me.classList.remove('hidden');
     els.mePlace.textContent = state.myRank != null ? '#' + state.myRank : '#…';

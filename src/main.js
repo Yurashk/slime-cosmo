@@ -752,11 +752,11 @@ function stylePreviewElement(el, config, size, glow) {
     el.style.borderRadius = '50%';
     const p = config.palette;
     el.style.background = `radial-gradient(circle at 30% 30%, ${p.light}, ${p.base} 45%, ${p.dark})`;
-    el.style.boxShadow = `${glow ? '0 0 20px ' + p.glow + ', 0 0 40px ' + p.glow : '0 0 10px ' + p.glow}`;
+    el.style.boxShadow = `${glow ? '0 0 14px ' + p.glow + ', 0 0 28px ' + p.glow : '0 0 8px ' + p.glow}`;
   } else {
     el.style.borderRadius = size == null ? '50%' : '22%';
     el.style.background = `radial-gradient(circle at 30% 30%, ${config.color}, ${config.glowColor})`;
-    el.style.boxShadow = `0 0 20px ${config.glowColor}, 0 0 40px ${config.glowColor}`;
+    el.style.boxShadow = `0 0 14px ${config.glowColor}, 0 0 28px ${config.glowColor}`;
   }
 }
 
@@ -1502,9 +1502,9 @@ function drawDropTrail(ctx, now) {
   const dropTo = Math.max(dropY, Math.min(landing, bowlYTop));
 
   ctx.save();
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = 0.55;
   ctx.strokeStyle = currentPreviewConfig.glowColor;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.6;
   ctx.setLineDash([7, 7]);
   ctx.lineDashOffset = -(now * 0.02) % 14;
   ctx.beginPath();
@@ -1695,29 +1695,29 @@ function drawBowl(ctx) {
   ctx.fill();
 
   const now = performance.now();
-  const pulse = 0.55 + 0.45 * Math.sin(now * 0.004);
+  const pulse = 0.5 + 0.35 * Math.sin(now * 0.004);
 
   trace(cavity);
-  ctx.strokeStyle = '#00f0ff';
-  ctx.lineWidth = 3;
-  ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 10 + 6 * pulse;
-  ctx.globalAlpha = 0.7 + 0.3 * pulse;
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 8 + 5 * pulse;
+  ctx.globalAlpha = 0.5 + 0.2 * pulse;
   ctx.stroke();
 
   ctx.beginPath();
   ctx.moveTo(centerX - bt, yT);
   ctx.lineTo(centerX + bt, yT);
-  ctx.strokeStyle = `rgba(170, 245, 255, ${0.8 + 0.2 * pulse})`;
-  ctx.lineWidth = 4.5;
-  ctx.shadowBlur = 14 + 7 * pulse;
+  ctx.strokeStyle = `rgba(170, 245, 255, ${0.55 + 0.15 * pulse})`;
+  ctx.lineWidth = 4;
+  ctx.shadowBlur = 10 + 5 * pulse;
   ctx.stroke();
 
   trace(slab);
-  ctx.globalAlpha = 0.45;
-  ctx.strokeStyle = 'rgba(0, 170, 240, 0.7)';
-  ctx.lineWidth = 1.5;
-  ctx.shadowBlur = 5;
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = 'rgba(0, 170, 240, 0.5)';
+  ctx.lineWidth = 1.4;
+  ctx.shadowBlur = 3;
   ctx.stroke();
 
   ctx.save();
