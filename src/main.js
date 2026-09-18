@@ -123,6 +123,7 @@ const MERGE_SPAWN_START_SCALE = 0.6;
 const MAX_SLIME_KICK = 3.5;
 const MAX_SLIME_SPEED = 12;
 const ACCESSORIES = ['horns', 'catEars', 'glasses'];
+const GLASSES_COLOR = '#9aa3b5';
 const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
 const COMBO_WINDOW = 1500;
@@ -1791,7 +1792,7 @@ function drawSlimes(ctx, now) {
       glowColor = hslToHex(hue, 100, 65);
       strokeColor = hslToHex(hue, 100, 75);
     }
-    const glowBlur = (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.6 + 0.4 * layoutScale);
+    const glowBlur = (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale);
 
     const opacity = slime.opacity !== undefined ? slime.opacity : 1;
 
@@ -2549,7 +2550,7 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
       ctx.fill();
     }
   } else if (acc === 'glasses') {
-    drawGlasses(ctx, sizeX, sizeY, glowColor);
+    drawGlasses(ctx, sizeX, sizeY);
   }
 
   ctx.restore();
@@ -2621,15 +2622,16 @@ function drawRoundHorns(ctx, r, glowColor) {
   }
 }
 
-function drawGlasses(ctx, sizeX, sizeY, glowColor) {
+function drawGlasses(ctx, sizeX, sizeY) {
   const eyeY = -sizeY * 0.05;
   const eyeSpacing = sizeX * 0.28;
   const lensR = sizeX * 0.155;
   const lensH = sizeY * 0.21;
   const frameW = Math.max(1.2, sizeX * 0.02);
 
-  ctx.strokeStyle = glowColor;
-  ctx.fillStyle = glowColor;
+  ctx.strokeStyle = GLASSES_COLOR;
+  ctx.fillStyle = GLASSES_COLOR;
+  ctx.shadowColor = 'rgba(170, 179, 196, 0.55)';
 
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 0.85;
@@ -2642,7 +2644,7 @@ function drawGlasses(ctx, sizeX, sizeY, glowColor) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  ctx.shadowBlur = 7;
+  ctx.shadowBlur = 6;
 
   for (const s of [-1, 1]) {
     const ex = s * eyeSpacing * 0.5;
