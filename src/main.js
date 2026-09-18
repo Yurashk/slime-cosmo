@@ -58,6 +58,7 @@ let highScore = parseInt(localStorage.getItem('neon-slime-highscore') || '0', 10
 let maxLevelReached = 1;
 let isGameOver = false;
 let lastDropTime = 0;
+let lastFrameTime = 0;
 const DROP_COOLDOWN = 400;
 let mouseX = 0;
 let canvasRect = null;
@@ -1346,8 +1347,7 @@ function restartGame() {
   leaderboardRestart();
 }
 
-function updateMergeEffects() {
-  const dt = 16.67;
+function updateMergeEffects(dt = 16.67) {
   for (let i = mergeEffects.length - 1; i >= 0; i--) {
     const effect = mergeEffects[i];
     effect.time += dt;
@@ -1380,8 +1380,7 @@ function updateMergeEffects() {
   }
 }
 
-function updateSlimesVisual() {
-  const dt = 16.67;
+function updateSlimesVisual(dt = 16.67) {
   for (const slime of slimes) {
     if (slime.mergeAnim) {
       slime.mergeAnim.elapsed += dt;
@@ -1426,11 +1425,11 @@ function updateSlimesVisual() {
   }
 }
 
-function updateParticles() {
+function updateParticles(dt = 16.67) {
   const bodies = Composite.allBodies(engine.world);
   for (const body of bodies) {
     if (body.plugin?.isParticle) {
-      body.plugin.life -= 0.02;
+      body.plugin.life -= dt * 0.0012;
       if (body.plugin.life <= 0) {
         Composite.remove(engine.world, body);
       } else {
@@ -1438,18 +1437,23 @@ function updateParticles() {
       }
     }
     if (body.plugin?.mergeCooldown > 0) {
-      body.plugin.mergeCooldown -= 16.67;
+      body.plugin.mergeCooldown -= dt;
       if (body.plugin.mergeCooldown < 0) body.plugin.mergeCooldown = 0;
     }
   }
 }
 
 function gameLoop() {
+  const now = performance.now();
+  let dt = lastFrameTime ? now - lastFrameTime : 16.67;
+  lastFrameTime = now;
+  if (dt > 50) dt = 50;
+  if (dt <= 0) dt = 16.67;
   if (!isGameOver) {
-    updateParticles();
-    updateAmbientParticles();
-    updateMergeEffects();
-    updateSlimesVisual();
+    updateParticles(dt);
+    updateAmbientParticles(dt);
+    updateMergeEffects(dt);
+    updateSlimesVisual(dt);
     checkGameOver();
   }
   updateUnlockFly();
@@ -2439,8 +2443,7 @@ function spawnAmbientParticle(slime) {
   });
 }
 
-function updateAmbientParticles() {
-  const dt = 16.67;
+function updateAmbientParticles(dt = 16.67) {
   for (const slime of slimes) {
     if (slime.body.isRemoved) continue;
     const cfg = slime.config;
