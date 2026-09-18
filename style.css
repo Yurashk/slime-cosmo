@@ -293,12 +293,15 @@ body::before {
 }
 
 .next-slime-hud {
-  position: static;
+  position: absolute;
+  top: calc(20px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  z-index: 5;
+  z-index: 6;
   pointer-events: none;
 }
 .next-slime-hud.hidden { display: none !important; }
@@ -320,6 +323,7 @@ body::before {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.collection-label:empty { display: none; }
 
 .next-slime-display {
   width: 34px;
