@@ -186,10 +186,6 @@ body::before {
   min-width: 0;
 }
 
-.hud-stat-max {
-  min-width: 44px;
-}
-
 .score-label {
   font-size: clamp(6px, 1.1vw, 8px);
   font-weight: 500;
@@ -208,14 +204,6 @@ body::before {
   line-height: 1;
 }
 
-.panel-line {
-  display: block;
-  height: 38px;
-  width: 1px;
-  flex: none;
-  background: linear-gradient(180deg, transparent, rgba(150, 210, 255, 0.28), transparent);
-}
-
 .best-label {
   font-size: clamp(6px, 1.1vw, 8px);
   font-weight: 500;
@@ -231,24 +219,6 @@ body::before {
   font-family: 'Courier New', monospace;
   color: rgba(200, 228, 255, 0.8);
   text-shadow: 0 0 6px rgba(140, 200, 255, 0.25);
-  line-height: 1;
-}
-
-.max-label {
-  font-size: clamp(6px, 1.1vw, 8px);
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(150, 210, 255, 0.42);
-  line-height: 1;
-}
-
-.max-value {
-  font-size: clamp(12px, 2.4vw, 15px);
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-  color: rgba(255, 226, 170, 0.9);
-  text-shadow: 0 0 6px rgba(255, 190, 80, 0.35);
   line-height: 1;
 }
 
@@ -635,12 +605,8 @@ body::before {
   .score-value {
     font-size: 17px;
   }
-  .best-value,
-  .max-value {
+  .best-value {
     font-size: 12px;
-  }
-  .panel-line {
-    height: 30px;
   }
   .next-slime-display {
     width: 26px;

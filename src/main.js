@@ -1222,7 +1222,7 @@ function applyBlastWave(centerX, centerY, sourceLevel) {
 
 function updateUI() {
   scoreEl.textContent = score.toLocaleString();
-  maxLevelEl.textContent = maxLevelReached;
+  if (maxLevelEl) maxLevelEl.textContent = maxLevelReached;
   if (collectionLabel) {
     const cname = getCollectionName(maxLevelReached);
     collectionLabel.textContent = cname || '';
