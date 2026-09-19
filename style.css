@@ -168,8 +168,14 @@ body::before {
 .hud-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 6px 12px 7px;
+}
+
+.hud-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .hud-stat {
@@ -194,7 +200,7 @@ body::before {
 }
 
 .score-value {
-  font-size: clamp(15px, 3.2vw, 21px);
+  font-size: clamp(18px, 3.9vw, 26px);
   font-weight: 600;
   font-family: 'Courier New', monospace;
   color: rgba(205, 242, 255, 0.96);
@@ -204,7 +210,7 @@ body::before {
 
 .panel-line {
   display: block;
-  height: 20px;
+  height: 38px;
   width: 1px;
   flex: none;
   background: linear-gradient(180deg, transparent, rgba(150, 210, 255, 0.28), transparent);
@@ -627,14 +633,14 @@ body::before {
     padding: 4px 8px 5px;
   }
   .score-value {
-    font-size: 15px;
+    font-size: 17px;
   }
   .best-value,
   .max-value {
     font-size: 12px;
   }
   .panel-line {
-    height: 16px;
+    height: 30px;
   }
   .next-slime-display {
     width: 26px;
