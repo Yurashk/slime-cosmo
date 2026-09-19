@@ -76,6 +76,7 @@ let lastTouchTime = -9999;
 const TOUCH_MOUSE_GUARD = 700;
 let comboCount = 0;
 let lastComboAt = -999999;
+let lastMergeChild = null;
 let comboShownUntil = 0;
 let collectionCanvasRect = null;
 let collectionLayoutKey = -1;
@@ -132,6 +133,7 @@ const ACCESSORY_CHANCE = 0.05;
 const RARE_BONUS = 1.5;
 const COMBO_WINDOW = 1500;
 const COMBO_DISPLAY_TIME = 1900;
+const COMBO_MAX_MULT = 10;
 const DROP_EDGE_INSET = 6;
 const BOWL_EDGE_TOLERANCE = 6;
 
@@ -1095,7 +1097,9 @@ function performMerge(a, b) {
   Composite.add(engine.world, newSlime.body);
 
   const nowMs = performance.now();
-  if (nowMs - lastComboAt <= COMBO_WINDOW) {
+  const isChain = (lastMergeChild && (a === lastMergeChild || b === lastMergeChild)) && (nowMs - lastComboAt <= COMBO_WINDOW);
+  lastMergeChild = newSlime;
+  if (isChain) {
     comboCount += 1;
   } else {
     comboCount = 1;
@@ -1109,7 +1113,7 @@ function performMerge(a, b) {
 
   const rareBonus = (a.accessory || b.accessory) ? RARE_BONUS : 1;
   const baseGain = Math.round(config.scoreValue * rareBonus);
-  const comboMult = comboCount >= 2 ? comboCount : 1;
+  const comboMult = comboCount >= 2 ? Math.min(comboCount, COMBO_MAX_MULT) : 1;
   const scoreGain = Math.round(baseGain * comboMult);
   score += scoreGain;
   const newLevel = level + 1;
@@ -1308,6 +1312,7 @@ function restartGame() {
   ambientParticles.length = 0;
   comboCount = 0;
   lastComboAt = -999999;
+  lastMergeChild = null;
   comboShownUntil = 0;
   if (unlockPopup) {
     unlockPopup.classList.remove('show');
@@ -1517,6 +1522,7 @@ function drawDropTrail(ctx, now) {
 function drawComboOverlay(ctx, now) {
   if (isGameOver || comboCount < 2 || now >= comboShownUntil) return;
 
+  const mult = Math.min(comboCount, COMBO_MAX_MULT);
   const lifeLeft = comboShownUntil - now;
   const fade = Math.min(1, lifeLeft / 420);
 
@@ -1536,16 +1542,16 @@ function drawComboOverlay(ctx, now) {
   ctx.shadowColor = color;
   ctx.shadowBlur = 12 * layoutScale;
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(`COMBO x${comboCount}`, 0, 0);
+  ctx.fillText(`COMBO x${mult}`, 0, 0);
   ctx.shadowBlur = 22 * layoutScale;
   ctx.fillStyle = color;
   ctx.globalAlpha = Math.max(0, fade) * 0.55;
-  ctx.fillText(`COMBO x${comboCount}`, 0, 0);
+  ctx.fillText(`COMBO x${mult}`, 0, 0);
   ctx.globalAlpha = Math.max(0, fade);
   ctx.font = `600 ${13 * layoutScale}px 'Segoe UI', 'Arial', sans-serif`;
   ctx.shadowBlur = 0;
   ctx.fillStyle = color;
-  ctx.fillText(`+${comboCount}× blok points`, 0, 20 * layoutScale);
+  ctx.fillText(`+${mult}× blok points`, 0, 20 * layoutScale);
   ctx.restore();
 }
 
