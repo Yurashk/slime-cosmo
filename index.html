@@ -5,17 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#080810">
   <title>Neon Slime Balance</title>
-  <script type="module" crossorigin src="/slime-cosmo/assets/index-BlG6allh.js"></script>
-  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-CBnPPaIU.css">
+  <script type="module" crossorigin src="/slime-cosmo/assets/index-BcoOUdUs.js"></script>
+  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-CMjrpobu.css">
 </head>
 <body>
   <div class="game-container">
     <main class="game-main">
+
+      <aside class="side-panel side-panel--collection" id="collection-panel" aria-label="Открытые планеты">
+        <div class="side-panel-title">PLANETS <span id="collection-panel-count">0 / 9</span></div>
+        <div id="collection-bar" class="collection-bar">
+          <canvas id="collection-canvas"></canvas>
+        </div>
+      </aside>
+
       <div class="canvas-wrapper">
         <canvas id="game-canvas"></canvas>
         <div id="preview-slime" class="preview-slime hidden"></div>
         <div id="drop-zone-indicator" class="drop-zone-indicator"></div>
-        
+
         <div id="hud" class="hud">
           <div class="glass-panel hud-bar" role="status" aria-live="polite">
             <div class="hud-stack">
@@ -29,7 +37,10 @@
               </div>
             </div>
           </div>
-          <button id="restart-btn" class="restart-btn" aria-label="Restart">⟳</button>
+          <div class="hud-actions">
+            <button id="lb-toggle" class="lb-toggle" aria-label="Leaderboard">TOP</button>
+            <button id="restart-btn" class="restart-btn" aria-label="Restart">⟳</button>
+          </div>
         </div>
 
         <div id="next-slime-hud" class="next-slime-hud">
@@ -45,11 +56,10 @@
           </div>
         </div>
       </div>
-    </main>
 
-    <div id="collection-bar" class="collection-bar">
-      <canvas id="collection-canvas"></canvas>
-    </div>
+      <aside class="side-panel side-panel--leaderboard" id="leaderboard-slot" aria-label="Leaderboard"></aside>
+
+    </main>
   </div>
 
   <div id="game-over-overlay" class="overlay hidden">
