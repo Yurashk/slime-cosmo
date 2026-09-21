@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#080810">
   <title>Neon Slime Balance</title>
-  <script type="module" crossorigin src="/slime-cosmo/assets/index-BcoOUdUs.js"></script>
-  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-CMjrpobu.css">
+  <script type="module" crossorigin src="/slime-cosmo/assets/index-ChlSInJg.js"></script>
+  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-zuju68JB.css">
 </head>
 <body>
   <div class="game-container">
@@ -39,6 +39,39 @@
           </div>
           <div class="hud-actions">
             <button id="lb-toggle" class="lb-toggle" aria-label="Leaderboard">TOP</button>
+            <button id="booster-antigravity" class="booster-btn booster-antigravity" data-booster="antigravity" aria-label="Антигравитация">
+              <span class="booster-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <path d="M4 14 12 6l8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 19.5 12 11.5l8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M5.5 2.5h13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 3"/>
+                </svg>
+              </span>
+              <span class="booster-lock">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                </svg>
+              </span>
+              <span class="booster-count">x1</span>
+              <span class="booster-badge">Ad/Movie</span>
+            </button>
+            <button id="booster-blackhole" class="booster-btn booster-blackhole" data-booster="blackhole" aria-label="Черная дыра">
+              <span class="booster-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2" fill="currentColor"/>
+                  <ellipse cx="12" cy="12" rx="10.5" ry="4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3.2 2.6" transform="rotate(-24 12 12)"/>
+                </svg>
+              </span>
+              <span class="booster-lock">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                </svg>
+              </span>
+              <span class="booster-count">x1</span>
+              <span class="booster-badge">Ad/Movie</span>
+            </button>
             <button id="restart-btn" class="restart-btn" aria-label="Restart">⟳</button>
           </div>
         </div>
@@ -60,6 +93,16 @@
       <aside class="side-panel side-panel--leaderboard" id="leaderboard-slot" aria-label="Leaderboard"></aside>
 
     </main>
+  </div>
+
+  <div id="ad-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Rewarded video">
+    <div class="overlay-content ad-content">
+      <h2 class="neon-text ad-title">REWARDED VIDEO</h2>
+      <p id="ad-message" class="ad-message">Загрузка рекламы…</p>
+      <div class="ad-progress"><span id="ad-progress-bar"></span></div>
+      <div id="ad-reward" class="ad-reward hidden">+1 BOOSTER</div>
+      <button id="ad-close-btn" class="neon-btn ad-close hidden">CONTINUE</button>
+    </div>
   </div>
 
   <div id="game-over-overlay" class="overlay hidden">
