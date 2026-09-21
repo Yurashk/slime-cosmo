@@ -807,12 +807,9 @@ function handleTouchStart(e) {
   const x = touch.clientX - canvasRect.left;
   const y = touch.clientY - canvasRect.top;
   lastPointer = { x, y };
-  if (bhMode) {
-    attemptBlackHoleConsume(x, y);
-    return;
-  }
   touchActiveId = touch.identifier;
   lastTouchTime = performance.now();
+  if (bhMode) return;
   dragOriginX = x;
   dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
   targetX = dragStartPreviewX;
@@ -822,12 +819,12 @@ function handleTouchStart(e) {
 function handleTouchMove(e) {
   if (isGameOver || adJob) return;
   lastTouchTime = performance.now();
-  const touch = findTrackedTouch(e.touches);
   if (e.touches.length > 0) {
     const t = e.touches[0];
     lastPointer = { x: t.clientX - canvasRect.left, y: t.clientY - canvasRect.top };
   }
   if (bhMode) return;
+  const touch = findTrackedTouch(e.touches);
   if (!touch || dragOriginX === null) return;
   const x = touch.clientX - canvasRect.left;
   targetX = dragStartPreviewX + (x - dragOriginX);
@@ -836,12 +833,15 @@ function handleTouchMove(e) {
 
 function handleTouchEnd(e) {
   lastTouchTime = performance.now();
-  if (bhMode) return;
   if (touchActiveId === null) return;
   if (!touchEndedForTracked(e.changedTouches)) return;
   touchActiveId = null;
   dragOriginX = null;
   if (isGameOver) return;
+  if (bhMode) {
+    if (lastPointer) attemptBlackHoleConsume(lastPointer.x, lastPointer.y);
+    return;
+  }
   dropSlime();
 }
 

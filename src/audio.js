@@ -225,11 +225,12 @@ class SlimeSfx {
     if (!this._ready()) return;
     const c = this.ctx;
     const t = c.currentTime;
-    this._burst(t, 0.05, 0.004, 0.06, { type: 'lowpass', f0: 800, q: 0.7 });
-    const pit = Math.pow(2, (Math.random() - 0.5) * 0.06);
-    this._sweep('sine', 215 * pit, 330 * pit, t + 0.01, 0.12, 0.035);
+    const pit = Math.pow(2, (Math.random() - 0.5) * 0.07);
+    this._burst(t, 0.075, 0.012, 0.16, { type: 'bandpass', f0: 1500 * pit, f1: 300 * pit, q: 0.6 });
+    this._sweep('sine', 330 * pit, 120 * pit, t + 0.02, 0.1, 0.1);
+    this._osc('sine', 620 * pit, t + 0.1, 0.05, 0.004, 0.14);
     if (isPlanet) {
-      this._osc('sine', 3000, t + 0.02, 0.04, 0.005, 0.25);
+      this._osc('sine', 2600, t + 0.02, 0.04, 0.005, 0.22);
     }
   }
 
