@@ -28,6 +28,14 @@ function buildDom() {
   root.id = 'leaderboard';
   root.className = 'leaderboard hidden';
   root.innerHTML = `
+    <div class="lb-head">
+      <span class="lb-title">LIVE LEADERBOARD</span>
+      <div class="lb-head-actions">
+        <button class="lb-collapse" aria-label="Свернуть">−</button>
+        <button class="lb-close" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="lb-summary hidden"></div>
     <div class="leaderboard-body">
       <div class="lb-rows"></div>
       <div class="lb-me hidden">
@@ -39,13 +47,31 @@ function buildDom() {
       </div>
       <div class="lb-status hidden"></div>
     </div>`;
-  document.body.appendChild(root);
+  const slot = document.getElementById('leaderboard-slot');
+  (slot || document.body).appendChild(root);
   els.wrap = root;
   els.rows = root.querySelector('.lb-rows');
   els.me = root.querySelector('.lb-me');
   els.mePlace = root.querySelector('.lb-me-place');
   els.meScore = root.querySelector('.lb-me-score');
   els.status = root.querySelector('.lb-status');
+  els.summary = root.querySelector('.lb-summary');
+  els.close = root.querySelector('.lb-close');
+  els.collapse = root.querySelector('.lb-collapse');
+  if (els.collapse) {
+    els.collapse.addEventListener('click', () => {
+      const collapsed = root.classList.toggle('collapsed');
+      els.collapse.textContent = collapsed ? '+' : '−';
+      updateSummary();
+    });
+  }
+  if (els.close) {
+    els.close.addEventListener('click', () => {
+      root.classList.remove('open');
+      const toggle = document.getElementById('lb-toggle');
+      if (toggle) toggle.classList.remove('active');
+    });
+  }
 }
 
 function fmt(n) {
@@ -84,18 +110,29 @@ function renderView() {
   }
 }
 
+function updateSummary() {
+  if (!els.summary || !els.wrap) return;
+  const collapsed = els.wrap.classList.contains('collapsed');
+  if (collapsed) {
+    const rank = state.myRank != null ? `#${state.myRank}` : '';
+    els.summary.textContent = rank ? `My rank ${rank}` : 'Топ-5 · листайте ↓';
+  }
+  els.summary.classList.toggle('hidden', !collapsed);
+}
+
 function queueRender() {
   if (state.renderTimer) return;
   state.renderTimer = requestAnimationFrame(() => {
     state.renderTimer = null;
     renderView();
+    updateSummary();
   });
 }
 
 async function loadTop() {
   try {
     const m = await getFirestoreModule();
-    const q = m.query(m.collection(m.db, COLLECTION), m.orderBy('score', 'desc'), m.limit(3));
+    const q = m.query(m.collection(m.db, COLLECTION), m.orderBy('score', 'desc'), m.limit(5));
     const snap = await m.getDocs(q);
     state.top = snap.docs.map((d, i) => ({
       uid: d.id,

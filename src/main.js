@@ -8,10 +8,12 @@ import {
   IRIDESCENT_LEVEL,
   GOLDEN_LEVEL,
   getCollectionName,
+  COLLECTIONS,
   hslToHex
 } from './SlimeConfig.js';
 import { createGameOverBg } from './gameOverBg.js';
 import { startLeaderboard, reportScore, leaderboardGameOver, leaderboardRestart } from './leaderboard.js';
+import { sfx } from './audio.js';
 
 const {
   Engine, Runner, Bodies, Body, Composite,
@@ -33,6 +35,7 @@ const unlockPopup = document.getElementById('unlock-popup');
 const unlockOrb = document.getElementById('unlock-orb');
 const unlockName = document.getElementById('unlock-name');
 const restartBtn = document.getElementById('restart-btn');
+const lbToggle = document.getElementById('lb-toggle');
 const playAgainBtn = document.getElementById('play-again-btn');
 const gameOverOverlay = document.getElementById('game-over-overlay');
 const finalScoreEl = document.getElementById('final-score');
@@ -93,6 +96,32 @@ const PLANET_TOTAL = 9;
 const COLLECTION_GAP = 6;
 const COLLECTION_ARC = 0.24;
 
+const BOOSTER_DEFS = {
+  antigravity: { unlockLevel: 10 },
+  blackhole: { unlockLevel: 8 }
+};
+const BOOSTER_NAMES = { antigravity: 'Антигравитация', blackhole: 'Черная дыра' };
+const AG_DURATION = 4000;
+const BH_DURATION = 620;
+const AG_FLOAT_SPEED = 3.2;
+
+const boosterEls = {};
+const blackHoles = [];
+const AD_KEY = 'neon-slime-boosters';
+const AD_UNLOCK_KEY = 'neon-slime-booster-unlocks';
+const adOverlay = document.getElementById('ad-overlay');
+const adMessageEl = document.getElementById('ad-message');
+const adProgressBarEl = document.getElementById('ad-progress-bar');
+const adCloseBtn = document.getElementById('ad-close-btn');
+const adRewardEl = document.getElementById('ad-reward');
+let boosterCharges = { antigravity: 1, blackhole: 1 };
+let boostersUnlocked = {};
+let agActive = null;
+let bhMode = false;
+let bhHover = null;
+let lastPointer = null;
+let adJob = null;
+
 const gameOverBg = createGameOverBg(goCanvas, () => {
   if (!goFrame || !goCanvas) return { x: 0, y: 0, w: 0, h: 0 };
   const c = goCanvas.getBoundingClientRect();
@@ -146,14 +175,6 @@ function isSpecialLevel(level) {
   return !!(cfg.isPlanet || cfg.legendary || cfg.iridescent || cfg.golden);
 }
 
-function getUnlockedLevels() {
-  const arr = [];
-  for (let i = 1; i <= maxLevelReached; i++) {
-    if (isSpecialLevel(i)) arr.push(i);
-  }
-  return arr;
-}
-
 function updateCollectionRect() {
   if (!collectionCanvas) return;
   const rect = collectionCanvas.getBoundingClientRect();
@@ -166,11 +187,59 @@ function computeCollectionLayout() {
   const W = collectionCanvasRect.width;
   const H = collectionCanvasRect.height;
   if (H < 2) return [];
-  const levels = getUnlockedLevels();
+  const levels = Object.keys(COLLECTIONS.solarSystem.levels)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .map(lv => ({ level: lv, unlocked: lv <= maxLevelReached }));
   if (levels.length === 0) return [];
   const rad = lv => getSlimeConfig(lv).radius;
+  const gap = COLLECTION_GAP;
+  const vertical = H > W * 1.15;
 
-  const sorted = levels.slice().sort((a, b) => b - a);
+  const sorted = levels;
+
+  if (vertical) {
+    const center = sorted[0];
+    const up = [];
+    const down = [];
+    let goUp = false;
+    for (let i = 1; i < sorted.length; i++) {
+      if (goUp) up.push(sorted[i]); else down.push(sorted[i]);
+      goUp = !goUp;
+    }
+    const upDesc = up.slice().sort((a, b) => b.level - a.level);
+    const downAsc = down.slice().sort((a, b) => a.level - b.level);
+
+    let y = 0;
+    const placed = [];
+    for (const item of upDesc) {
+      placed.push({ item, y: y + rad(item.level) });
+      y += rad(item.level) * 2 + gap;
+    }
+    const centerY = y + rad(center.level);
+    placed.push({ item: center, y: centerY });
+    y = centerY + rad(center.level) + gap;
+    for (const item of downAsc) {
+      placed.push({ item, y: y + rad(item.level) });
+      y += rad(item.level) * 2 + gap;
+    }
+    const total = y + gap;
+
+    const maxRad = rad(center.level);
+    const fitH = total > H - 12 ? (H - 12) / total : 1;
+    const targetMax = Math.min(36, W * 0.44);
+    const fitW = targetMax / maxRad;
+    const fit = Math.min(fitW, fitH, 1);
+
+    const centerX = W / 2;
+    const baseY = H / 2;
+    const slots = [];
+    for (const p of placed) {
+      slots.push({ level: p.item.level, unlocked: p.item.unlocked, x: centerX, y: baseY + (p.y - total / 2) * fit, r: rad(p.item.level) * fit, fit });
+    }
+    return slots;
+  }
+
   const center = sorted[0];
   const left = [];
   const right = [];
@@ -180,33 +249,32 @@ function computeCollectionLayout() {
     goLeft = !goLeft;
   }
 
-  const gap = COLLECTION_GAP;
   const leftXs = [];
   let cursor = gap;
-  for (const lv of left) {
-    leftXs.push({ lv, x0: cursor + rad(lv) });
-    cursor += rad(lv) * 2 + gap;
+  for (const item of left) {
+    leftXs.push({ item, x0: cursor + rad(item.level) });
+    cursor += rad(item.level) * 2 + gap;
   }
   const rightXs = [];
   cursor = gap;
-  for (const lv of right) {
-    rightXs.push({ lv, x0: cursor + rad(lv) });
-    cursor += rad(lv) * 2 + gap;
+  for (const item of right) {
+    rightXs.push({ item, x0: cursor + rad(item.level) });
+    cursor += rad(item.level) * 2 + gap;
   }
 
   const combined = leftXs.slice().reverse();
-  combined.push({ lv: center, x0: 0 });
+  combined.push({ item: center, x0: 0 });
   for (const s of rightXs) combined.push(s);
 
   let x = 0;
   const placed = [];
   for (const s of combined) {
-    placed.push({ lv: s.lv, x: x + rad(s.lv) });
-    x += rad(s.lv) * 2 + gap;
+    placed.push({ item: s.item, x: x + rad(s.item.level) });
+    x += rad(s.item.level) * 2 + gap;
   }
   const total = x + gap;
 
-  const maxRad = rad(center);
+  const maxRad = rad(center.level);
   const fitW = total > W - 12 ? (W - 12) / total : 1;
   const targetMax = Math.min(28, H * 0.42);
   const fitH = targetMax / maxRad;
@@ -220,22 +288,9 @@ function computeCollectionLayout() {
     const sx = centerX + (p.x - total / 2) * fit;
     const f = Math.abs(sx - centerX) / Math.max(1, W / 2);
     const y = baseY - amp * (1 - f * f);
-    slots.push({ level: p.lv, x: sx, y, r: rad(p.lv) * fit, fit });
+    slots.push({ level: p.item.level, unlocked: p.item.unlocked, x: sx, y, r: rad(p.item.level) * fit, fit });
   }
   return slots;
-}
-
-function collectionEyeTarget() {
-  if (canvasRect) {
-    if (!isGameOver && renderPreviewX != null) {
-      return {
-        x: canvasRect.left + renderPreviewX,
-        y: canvasRect.top + Math.max(50, canvasRect.height * 0.16)
-      };
-    }
-    return { x: canvasRect.left + canvasRect.width / 2, y: canvasRect.top + 30 };
-  }
-  return { x: (window.innerWidth || 0) / 2, y: 30 };
 }
 
 function drawPanelEyes(g, r, dirX, dirY) {
@@ -283,11 +338,62 @@ function getPanelSlime(level) {
   return slime;
 }
 
-function drawPanelSlime(g, slot, target, now) {
+function drawLockedSlot(g, level, x, y, r) {
+  const cfg = getSlimeConfig(level);
+  const pal = cfg.isPlanet && cfg.palette ? cfg.palette : null;
+  g.save();
+  g.translate(Math.round(x) + 0.5, Math.round(y) + 0.5);
+  g.globalAlpha = 0.85;
+  g.globalCompositeOperation = 'source-over';
+  const col = pal ? pal.base : 'rgba(150, 170, 210, 0.55)';
+  if (pal) {
+    const grad = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r);
+    grad.addColorStop(0, pal.light || col);
+    grad.addColorStop(1, pal.dark || col);
+    g.fillStyle = grad;
+  } else {
+    g.fillStyle = col;
+  }
+  g.beginPath();
+  g.arc(0, 0, r, 0, Math.PI * 2);
+  g.fill();
+  if (pal) {
+    g.fillStyle = 'rgba(8, 10, 24, 0.55)';
+    g.beginPath();
+    g.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+    g.fill();
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + level;
+      const bx = Math.cos(a) * r * 0.56;
+      const by = Math.sin(a) * r * 0.56;
+      g.beginPath();
+      g.arc(bx, by, r * (0.09 + (i % 2) * 0.05), 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  g.globalAlpha = 0.8;
+  g.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(0, 0, r, 0, Math.PI * 2);
+  g.stroke();
+  g.fillStyle = 'rgba(160, 190, 235, 0.8)';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `800 ${Math.max(8, r * 0.85)}px "Courier New", monospace`;
+  g.fillText('?', 0, r * 0.05 + 0.5);
+  g.restore();
+}
+
+function drawPanelSlime(g, slot, now) {
   const cfg = getSlimeConfig(slot.level);
   const r = slot.r;
-  const bob = Math.sin(now * 0.0021 + slot.level * 1.7) * 1.4;
-  const y = slot.y + bob;
+  const y = slot.y;
+
+  if (!slot.unlocked) {
+    drawLockedSlot(g, slot.level, slot.x, y, r);
+    return;
+  }
 
   let revealAlpha = 1;
   let revealScale = 1;
@@ -296,16 +402,6 @@ function drawPanelSlime(g, slot, target, now) {
     revealScale = 1 + 1.1 * (1 - easeOutBack(t));
     revealAlpha = Math.min(1, t * 4);
     if (t >= 1) slotReveal = null;
-  }
-
-  let dirX = 0;
-  let dirY = -1;
-  if (target && collectionCanvasRect) {
-    const dx = target.x - (collectionCanvasRect.left + slot.x);
-    const dy = target.y - (collectionCanvasRect.top + y);
-    const dl = Math.hypot(dx, dy) || 1;
-    dirX = dx / dl;
-    dirY = dy / dl;
   }
 
   g.save();
@@ -317,8 +413,8 @@ function drawPanelSlime(g, slot, target, now) {
 
   if (cfg.isPlanet && cfg.palette) {
     const planet = getPanelSlime(slot.level);
-    planet.body.angle = Math.sin(now * 0.0006 + slot.level) * 0.18;
-    drawPlanetBody(g, planet, cfg, r, now, 1, revealAlpha, cfg.glowColor, 8 + r * 0.45);
+    planet.body.angle = slot.level % 2 ? 0.16 : -0.16;
+    drawPlanetBody(g, planet, cfg, r, 0, 1, revealAlpha, cfg.glowColor, 8 + r * 0.45);
   } else {
     const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
     const grad = g.createLinearGradient(0, -r, 0, r);
@@ -345,7 +441,7 @@ function drawPanelSlime(g, slot, target, now) {
     g.stroke();
   }
 
-  drawPanelEyes(g, r, dirX, dirY);
+  drawPanelEyes(g, r, 0, -1);
   g.restore();
 }
 
@@ -373,9 +469,8 @@ function updateCollectionBar() {
   if (collectionTick) return;
   g.clearRect(0, 0, cssW, cssH);
   if (collectionLayout.length === 0) return;
-  const target = collectionEyeTarget();
   for (const slot of collectionLayout) {
-    drawPanelSlime(g, slot, target, now);
+    drawPanelSlime(g, slot, now);
   }
 }
 
@@ -391,7 +486,9 @@ function triggerUnlock(level) {
   unlockPopup.classList.remove('hidden');
   void unlockPopup.offsetWidth;
   unlockPopup.classList.add('show');
+  sfx.playUnlock();
   unlockFly = { level, config: cfg, phase: 'show', t0: performance.now() };
+  unlockBoostersThrough(level);
 }
 
 function updateUnlockFly() {
@@ -455,9 +552,14 @@ function init() {
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
   Events.on(engine, 'afterUpdate', containSlimes);
   gameStartTime = performance.now();
+  sfx.init();
+  window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+  window.addEventListener('keydown', () => sfx.unlock(), { once: true });
   spawnNextSlime();
   updatePreview();
+  updateUI();
   updateHighScoreUI();
+  setupBoostersUI();
   startLeaderboard();
   requestAnimationFrame(gameLoop);
 }
@@ -641,9 +743,17 @@ function setupEventListeners() {
 
   restartBtn.addEventListener('click', restartGame);
   playAgainBtn.addEventListener('click', restartGame);
+  if (lbToggle) lbToggle.addEventListener('click', toggleLeaderboardPanel);
 
   Events.on(engine, 'collisionStart', handleCollisionStart);
   Events.on(engine, 'collisionActive', handleCollisionActive);
+}
+
+function toggleLeaderboardPanel() {
+  const lb = document.getElementById('leaderboard');
+  if (!lb) return;
+  const open = lb.classList.toggle('open');
+  if (lbToggle) lbToggle.classList.toggle('active', open);
 }
 
 function isSyntheticMouseBlocked() {
@@ -653,13 +763,26 @@ function isSyntheticMouseBlocked() {
 
 function handleMouseMove(e) {
   if (isGameOver || isSyntheticMouseBlocked()) return;
-  targetX = e.clientX - canvasRect.left;
+  const x = e.clientX - canvasRect.left;
+  const y = e.clientY - canvasRect.top;
+  lastPointer = { x, y };
+  if (bhMode) return;
+  targetX = x;
   updatePreviewPosition();
 }
 
 function handleMouseDown(e) {
   if (isGameOver || isSyntheticMouseBlocked()) return;
-  if (e.button === 0) dropSlime();
+  if (e.button === 0) {
+    const x = e.clientX - canvasRect.left;
+    const y = e.clientY - canvasRect.top;
+    lastPointer = { x, y };
+    if (bhMode) {
+      attemptBlackHoleConsume(x, y);
+      return;
+    }
+    dropSlime();
+  }
 }
 
 function findTrackedTouch(list) {
@@ -678,21 +801,33 @@ function touchEndedForTracked(changed) {
 }
 
 function handleTouchStart(e) {
-  if (isGameOver) return;
+  if (isGameOver || adJob) return;
   if (e.touches.length > 1) return;
   const touch = e.touches[0];
+  const x = touch.clientX - canvasRect.left;
+  const y = touch.clientY - canvasRect.top;
+  lastPointer = { x, y };
+  if (bhMode) {
+    attemptBlackHoleConsume(x, y);
+    return;
+  }
   touchActiveId = touch.identifier;
   lastTouchTime = performance.now();
-  dragOriginX = touch.clientX - canvasRect.left;
+  dragOriginX = x;
   dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
   targetX = dragStartPreviewX;
   updatePreviewPosition();
 }
 
 function handleTouchMove(e) {
-  if (isGameOver) return;
+  if (isGameOver || adJob) return;
   lastTouchTime = performance.now();
   const touch = findTrackedTouch(e.touches);
+  if (e.touches.length > 0) {
+    const t = e.touches[0];
+    lastPointer = { x: t.clientX - canvasRect.left, y: t.clientY - canvasRect.top };
+  }
+  if (bhMode) return;
   if (!touch || dragOriginX === null) return;
   const x = touch.clientX - canvasRect.left;
   targetX = dragStartPreviewX + (x - dragOriginX);
@@ -701,6 +836,7 @@ function handleTouchMove(e) {
 
 function handleTouchEnd(e) {
   lastTouchTime = performance.now();
+  if (bhMode) return;
   if (touchActiveId === null) return;
   if (!touchEndedForTracked(e.changedTouches)) return;
   touchActiveId = null;
@@ -716,7 +852,13 @@ function handleTouchCancel() {
 }
 
 function handleKeyDown(e) {
+  if (adJob) return;
+  if (e.code === 'Escape' && bhMode) {
+    exitBlackHoleMode(false);
+    return;
+  }
   if (e.code === 'Space' && !isGameOver) {
+    if (bhMode) return;
     e.preventDefault();
     dropSlime();
   }
@@ -792,9 +934,11 @@ function spawnNextSlime() {
 
   updatePreview();
   updatePreviewPosition();
+  sfx.playRespawn(!!nextSlimeConfig.isPlanet);
 }
 
 function dropSlime() {
+  if (bhMode) return;
   const now = performance.now();
   if (now - lastDropTime < DROP_COOLDOWN) return;
   lastDropTime = now;
@@ -808,6 +952,7 @@ function dropSlime() {
   slimeByBody.set(slime.body, slime);
   slimes.push(slime);
   Composite.add(engine.world, slime.body);
+  sfx.playDrop();
 
   spawnNextSlime();
   updateUI();
@@ -1124,6 +1269,10 @@ function performMerge(a, b) {
   if (isNewUnlock && isSpecialLevel(newLevel)) triggerUnlock(newLevel);
 
   applyBlastWave(anchorX, midY, level + 1);
+
+  if (config.isPlanet) sfx.playPlanetMerge(newLevel);
+  else sfx.playMerge(newLevel);
+  if (comboCount >= 2) sfx.playCombo(comboCount);
 }
 
 function handleCollisionStart(event) {
@@ -1231,10 +1380,306 @@ function updateUI() {
     const cname = getCollectionName(maxLevelReached);
     collectionLabel.textContent = cname || '';
   }
+  const countEl = document.getElementById('collection-panel-count');
+  if (countEl) {
+    const unlocked = Math.min(PLANET_TOTAL, Math.max(0, maxLevelReached - COLLECTIONS.solarSystem.from + 1));
+    countEl.textContent = `${unlocked} / ${PLANET_TOTAL}`;
+  }
 }
 
 function updateHighScoreUI() {
   highScoreEl.textContent = highScore.toLocaleString();
+}
+
+function loadBoosterPersist() {
+  try {
+    const c = JSON.parse(localStorage.getItem(AD_KEY) || 'null');
+    if (c && typeof c === 'object') {
+      for (const key of Object.keys(BOOSTER_DEFS)) {
+        if (Number.isFinite(c[key])) boosterCharges[key] = Math.max(0, Math.min(5, Math.round(c[key])));
+      }
+    }
+    const u = JSON.parse(localStorage.getItem(AD_UNLOCK_KEY) || 'null');
+    if (u && typeof u === 'object') boostersUnlocked = u;
+  } catch (e) {}
+  for (const key of Object.keys(BOOSTER_DEFS)) {
+    if (maxLevelReached >= BOOSTER_DEFS[key].unlockLevel) boostersUnlocked[key] = true;
+  }
+  saveBoosterCharges();
+  saveBoosterUnlocks();
+}
+
+function saveBoosterCharges() {
+  try { localStorage.setItem(AD_KEY, JSON.stringify(boosterCharges)); } catch (e) {}
+}
+
+function saveBoosterUnlocks() {
+  try { localStorage.setItem(AD_UNLOCK_KEY, JSON.stringify(boostersUnlocked)); } catch (e) {}
+}
+
+function setupBoostersUI() {
+  loadBoosterPersist();
+  for (const key of Object.keys(BOOSTER_DEFS)) {
+    const btn = document.getElementById(`booster-${key}`);
+    if (!btn) continue;
+    boosterEls[key] = btn;
+    btn.addEventListener('click', () => onBoosterClick(key));
+  }
+  if (adCloseBtn) adCloseBtn.addEventListener('click', closeAdOverlay);
+  updateBoosterUI();
+}
+
+function onBoosterClick(key) {
+  if (isGameOver || adJob) return;
+  if (key === 'blackhole' && bhMode) {
+    exitBlackHoleMode(false);
+    return;
+  }
+  if (key === 'antigravity' && agActive) {
+    stopAntigravity();
+    return;
+  }
+  if (!boostersUnlocked[key]) {
+    sfx.playBoosterDenied();
+    return;
+  }
+  if (boosterCharges[key] > 0) {
+    if (key === 'antigravity') {
+      if (bhMode) exitBlackHoleMode(false);
+      startAntigravity();
+    } else {
+      if (agActive) stopAntigravity();
+      enterBlackHoleMode();
+    }
+  } else {
+    startRewardAd(key);
+  }
+}
+
+function updateBoosterUI() {
+  for (const key of Object.keys(BOOSTER_DEFS)) {
+    const btn = boosterEls[key];
+    if (!btn) continue;
+    const unlocked = !!boostersUnlocked[key];
+    const count = boosterCharges[key] | 0;
+    const active = (key === 'antigravity' && !!agActive) || (key === 'blackhole' && bhMode);
+    btn.classList.toggle('locked', !unlocked);
+    btn.classList.toggle('active', active);
+    const countEl = btn.querySelector('.booster-count');
+    const badgeEl = btn.querySelector('.booster-badge');
+    if (countEl) countEl.textContent = `x${count}`;
+    if (countEl) countEl.classList.toggle('hidden', !unlocked || count === 0);
+    if (badgeEl) badgeEl.classList.toggle('hidden', unlocked && count > 0);
+    const hintText = !unlocked
+      ? `Открой ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel).name}, чтобы разблокировать`
+      : count > 0
+        ? `${BOOSTER_NAMES[key]} — в наличии ${count}`
+        : `${BOOSTER_NAMES[key]} — посмотреть рекламу и получить +1`;
+    btn.dataset.hint = hintText;
+    btn.title = hintText;
+  }
+}
+
+function unlockBoostersThrough(level) {
+  let changed = false;
+  for (const key of Object.keys(BOOSTER_DEFS)) {
+    if (BOOSTER_DEFS[key].unlockLevel <= level && !boostersUnlocked[key]) {
+      boostersUnlocked[key] = true;
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveBoosterUnlocks();
+    updateBoosterUI();
+  }
+}
+
+function consumeBooster(key) {
+  boosterCharges[key] = Math.max(0, (boosterCharges[key] | 0) - 1);
+  saveBoosterCharges();
+  updateBoosterUI();
+}
+
+function grantBooster(key) {
+  boosterCharges[key] = Math.min(5, (boosterCharges[key] | 0) + 1);
+  saveBoosterCharges();
+  updateBoosterUI();
+}
+
+function setTimescale(v) {
+  if (engine) engine.timing.timeScale = v;
+  if (runner) runner.timeScale = v;
+}
+
+function restoreGravity() {
+  if (engine) engine.world.gravity.y = 0.9;
+}
+
+function stopBoosterEffects() {
+  restoreGravity();
+  setTimescale(1);
+  agActive = null;
+  bhMode = false;
+  bhHover = null;
+  if (canvas) canvas.style.cursor = '';
+}
+
+function startAntigravity() {
+  if (agActive || isGameOver) return;
+  consumeBooster('antigravity');
+  agActive = { start: performance.now(), until: performance.now() + AG_DURATION };
+  if (engine) engine.world.gravity.y = 0.18;
+  sfx.playAntigravity();
+  updateBoosterUI();
+}
+
+function stopAntigravity() {
+  if (!agActive) return;
+  restoreGravity();
+  agActive = null;
+  sfx.playAntigravityEnd();
+  updateBoosterUI();
+}
+
+function updateAntigravity(now) {
+  if (!agActive) return;
+  if (now >= agActive.until) {
+    stopAntigravity();
+    return;
+  }
+  const t = now - agActive.start;
+  for (const slime of slimes) {
+    if (slime.body.isRemoved || slime.mergeAnim || slime.flownOut) continue;
+    const mass = slime.body.mass;
+    const pos = slime.body.position;
+    if (slime.config.level <= 4) {
+      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.004 + slime.seed * 7) * mass * 0.05, y: -mass * 0.55 });
+      if (slime.body.velocity.y < -AG_FLOAT_SPEED) {
+        Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: -AG_FLOAT_SPEED });
+      }
+      if (slime.elastic < 0.1) slime.elastic += 0.012;
+    } else {
+      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.011 + slime.seed * 13) * mass * 0.22, y: mass * 0.72 });
+      if (slime.elastic < 0.16) slime.elastic = Math.min(0.16, slime.elastic + 0.02);
+    }
+  }
+}
+
+function enterBlackHoleMode() {
+  if (bhMode || isGameOver) return;
+  bhMode = true;
+  bhHover = null;
+  setTimescale(0.25);
+  if (canvas) canvas.style.cursor = 'crosshair';
+  sfx.playBlackHoleArm();
+  updateBoosterUI();
+}
+
+function exitBlackHoleMode(success) {
+  if (!bhMode) {
+    bhHover = null;
+    return;
+  }
+  bhMode = false;
+  bhHover = null;
+  setTimescale(1);
+  if (canvas) canvas.style.cursor = '';
+  if (!success) sfx.playBoosterCancel();
+  updateBoosterUI();
+}
+
+function slimeAtPoint(x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const s of slimes) {
+    if (s.body.isRemoved || s.consume || s.flownOut) continue;
+    const r = s.config.radius * layoutScale;
+    const d = Math.hypot(s.body.position.x - x, s.body.position.y - y);
+    if (d <= r * 1.3 && d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+function updateTargetHover() {
+  if (!bhMode) return;
+  bhHover = lastPointer ? slimeAtPoint(lastPointer.x, lastPointer.y) : null;
+}
+
+function attemptBlackHoleConsume(x, y) {
+  if (!bhMode) return;
+  if (x < bowlCenterX - bowlHalfTop - 8 || x > bowlCenterX + bowlHalfTop + 8 || y < bowlYTop - 8 || y > bowlYBottom + 8) {
+    exitBlackHoleMode(false);
+    return;
+  }
+  const slime = slimeAtPoint(x, y);
+  if (slime) {
+    consumeSlimeWithBlackHole(slime);
+    consumeBooster('blackhole');
+    exitBlackHoleMode(true);
+  }
+}
+
+function consumeSlimeWithBlackHole(slime) {
+  const x = slime.body.position.x;
+  const y = slime.body.position.y;
+  blackHoles.push({
+    x, y,
+    level: slime.config.level,
+    color: slime.config.glowColor,
+    radius: Math.max(6, slime.config.radius * layoutScale),
+    time: 0,
+    duration: BH_DURATION
+  });
+  removeSlimeByIdentity(slime);
+  Composite.remove(engine.world, slime.body);
+  sfx.playBlackHole();
+}
+
+function startRewardAd(key) {
+  if (adJob || isGameOver) return;
+  if (window.neonAds && typeof window.neonAds.showRewarded === 'function') {
+    window.neonAds.showRewarded({ onGrant: () => grantBooster(key), onClose: () => {} });
+    return;
+  }
+  if (!adOverlay || !adMessageEl || !adProgressBarEl || !adCloseBtn || !adRewardEl) return;
+  adCloseBtn.classList.add('hidden');
+  adRewardEl.classList.add('hidden');
+  adProgressBarEl.style.width = '0%';
+  adMessageEl.textContent = 'Загрузка рекламы…';
+  adOverlay.classList.remove('hidden');
+  adJob = { key, t0: performance.now(), dur: 3400, stop: null, granted: false };
+  const tick = () => {
+    if (!adJob) return;
+    const elapsed = performance.now() - adJob.t0;
+    const p = Math.min(elapsed / adJob.dur, 1);
+    adProgressBarEl.style.width = `${(p * 100).toFixed(1)}%`;
+    if (p < 0.3) {
+      adMessageEl.textContent = 'Загрузка рекламы…';
+    } else if (p < 1) {
+      adMessageEl.textContent = `Реклама… ${Math.ceil((1 - p) * adJob.dur / 1000)} с`;
+    } else if (!adJob.granted) {
+      adJob.granted = true;
+      grantBooster(adJob.key);
+      sfx.playReward();
+      adMessageEl.textContent = 'Бустер получен!';
+      adRewardEl.classList.remove('hidden');
+      adCloseBtn.classList.remove('hidden');
+    }
+  };
+  tick();
+  const iv = setInterval(tick, 120);
+  adJob.stop = () => clearInterval(iv);
+}
+
+function closeAdOverlay() {
+  if (adOverlay) adOverlay.classList.add('hidden');
+  if (adJob) {
+    adJob.stop();
+    adJob = null;
+  }
 }
 
 function checkGameOver() {
@@ -1261,6 +1706,8 @@ function checkGameOver() {
 function triggerGameOver() {
   isGameOver = true;
   Runner.stop(runner);
+  stopBoosterEffects();
+  sfx.playGameOver();
   gameEndTime = performance.now();
   isNewRecord = score > highScore;
   if (isNewRecord) {
@@ -1321,6 +1768,9 @@ function restartGame() {
   unlockFly = null;
   slotReveal = null;
   collectionLayoutKey = -1;
+  stopBoosterEffects();
+  closeAdOverlay();
+  updateBoosterUI();
   gameOverOverlay.classList.add('hidden');
 
   Composite.clear(engine.world, false);
@@ -1459,8 +1909,10 @@ function gameLoop() {
     updateAmbientParticles(dt);
     updateMergeEffects(dt);
     updateSlimesVisual(dt);
+    updateAntigravity(now);
     checkGameOver();
   }
+  updateTargetHover();
   updateUnlockFly();
   updateCollectionBar();
   renderCustom();
@@ -1479,12 +1931,135 @@ function renderCustom() {
   drawStars(ctx, now);
   drawDust(ctx, now);
   drawBowl(ctx);
+  drawAntigravityOverlay(ctx, now);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
   drawDropTrail(ctx, now);
   drawSlimes(ctx, now);
+  drawBlackHoles(ctx, now);
+  drawTargetModeOverlay(ctx, now);
   drawAmbientParticles(ctx, now);
   drawComboOverlay(ctx, now);
+}
+
+function drawAntigravityOverlay(ctx, now) {
+  if (!agActive) return;
+  const remain = agActive.until - now;
+  const progress = Math.max(0, Math.min(1, 1 - remain / AG_DURATION));
+  const alpha = 0.1 + 0.05 * Math.sin(now * 0.005);
+  ctx.save();
+  const grad = ctx.createLinearGradient(0, bowlYTop, 0, bowlYBottom);
+  grad.addColorStop(0, `rgba(120, 255, 190, ${0.5 * alpha})`);
+  grad.addColorStop(1, 'rgba(120, 255, 190, 0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(bowlCenterX - bowlHalfTop, bowlYTop);
+  ctx.lineTo(bowlCenterX + bowlHalfTop, bowlYTop);
+  ctx.lineTo(bowlCenterX + bowlHalfBottom, bowlYBottom);
+  ctx.lineTo(bowlCenterX - bowlHalfBottom, bowlYBottom);
+  ctx.closePath();
+  ctx.fill();
+  const labelY = bowlYTop - 14;
+  const fw = bowlHalfTop * 0.7;
+  ctx.fillStyle = `rgba(140, 255, 195, ${0.85 + 0.15 * Math.sin(now * 0.006)})`;
+  ctx.font = '800 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('АНТИГРАВИТАЦИЯ', bowlCenterX, labelY);
+  ctx.fillStyle = 'rgba(140, 255, 195, 0.55)';
+  ctx.fillRect(bowlCenterX - fw / 2, labelY + 4, fw, 3);
+  ctx.fillStyle = 'rgba(180, 255, 220, 0.95)';
+  ctx.fillRect(bowlCenterX - fw / 2, labelY + 4, Math.max(2, fw * progress), 3);
+  ctx.restore();
+}
+
+function drawBlackHoles(ctx, now) {
+  if (blackHoles.length === 0) return;
+  for (let i = blackHoles.length - 1; i >= 0; i--) {
+    const h = blackHoles[i];
+    h.time += 16.67;
+    const p = Math.min(1, h.time / h.duration);
+    const alpha = 1 - p;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const core = h.radius * Math.max(0.05, 0.5 - p * 0.42);
+    const gradC = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, Math.max(1, core));
+    gradC.addColorStop(0, 'rgba(255,255,255,0.95)');
+    gradC.addColorStop(0.4, h.color);
+    gradC.addColorStop(1, 'rgba(10,4,30,0)');
+    ctx.fillStyle = gradC;
+    ctx.shadowColor = 'rgba(180,90,255,0.9)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, Math.max(1, core), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    for (let k = 0; k < 2; k++) {
+      const rr = h.radius * (0.5 + (1 - p) * k * 0.75);
+      const rot = now * 0.01 + k * 1.4 + p * 9;
+      ctx.strokeStyle = k === 0 ? h.color : 'rgba(220,170,255,0.8)';
+      ctx.lineWidth = Math.max(0.6, 2 - p);
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, Math.max(1, rr), rot, rot + Math.PI * 1.3);
+      ctx.stroke();
+    }
+    for (let k = 0; k < 7; k++) {
+      const ang = p * Math.PI * 4 + k * 0.9;
+      const rad = h.radius * (1.5 - p * 1.4) * (1 + 0.18 * Math.sin(k * 2.3));
+      ctx.fillStyle = k % 2 ? '#ffffff' : h.color;
+      ctx.beginPath();
+      ctx.arc(h.x + Math.cos(ang) * rad, h.y + Math.sin(ang) * rad, Math.max(0.3, 1.7 - p * 1.2), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (p >= 1) blackHoles.splice(i, 1);
+  }
+}
+
+function drawTargetModeOverlay(ctx, now) {
+  if (!bhMode) return;
+  ctx.save();
+  if (lastPointer) {
+    const p = lastPointer;
+    const cr = 12;
+    ctx.strokeStyle = 'rgba(200, 140, 255, 0.95)';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = 'rgba(190, 120, 255, 0.9)';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, cr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+      ctx.moveTo(p.x + Math.cos(a) * (cr + 6), p.y + Math.sin(a) * (cr + 6));
+      ctx.lineTo(p.x + Math.cos(a) * (cr + 11), p.y + Math.sin(a) * (cr + 11));
+    }
+    ctx.stroke();
+  }
+  if (bhHover && !bhHover.body.isRemoved) {
+    const x = bhHover.body.position.x;
+    const y = bhHover.body.position.y;
+    const r = bhHover.config.radius * layoutScale * 1.22;
+    const pulse = 0.85 + 0.15 * Math.sin(now * 0.008);
+    ctx.setLineDash([6, 10]);
+    ctx.lineDashOffset = -now * 0.06;
+    ctx.strokeStyle = 'rgba(210, 150, 255, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(200, 130, 255, 0.9)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(x, y, r * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  const labelY = Math.max(26, bowlYTop - 30);
+  ctx.fillStyle = 'rgba(205, 150, 255, 0.95)';
+  ctx.font = '800 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('ЧЕРНАЯ ДЫРА: нажми на слизня', bowlCenterX, labelY);
+  ctx.fillStyle = 'rgba(180, 130, 255, 0.75)';
+  ctx.font = '600 10px sans-serif';
+  ctx.fillText('Esc или клик мимо чаши — отмена', bowlCenterX, labelY + 13);
+  ctx.restore();
 }
 
 function drawDropTrail(ctx, now) {
