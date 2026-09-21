@@ -104,6 +104,7 @@ const BOOSTER_NAMES = { antigravity: 'Антигравитация', blackhole: 
 const AG_DURATION = 4000;
 const BH_DURATION = 620;
 const AG_FLOAT_SPEED = 3.2;
+const BH_TOUCH_LIFT = 72;
 
 const boosterEls = {};
 const blackHoles = [];
@@ -809,7 +810,10 @@ function handleTouchStart(e) {
   lastPointer = { x, y };
   touchActiveId = touch.identifier;
   lastTouchTime = performance.now();
-  if (bhMode) return;
+  if (bhMode) {
+    lastPointer = { x, y: y - BH_TOUCH_LIFT };
+    return;
+  }
   dragOriginX = x;
   dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
   targetX = dragStartPreviewX;
@@ -821,7 +825,9 @@ function handleTouchMove(e) {
   lastTouchTime = performance.now();
   if (e.touches.length > 0) {
     const t = e.touches[0];
-    lastPointer = { x: t.clientX - canvasRect.left, y: t.clientY - canvasRect.top };
+    const px = t.clientX - canvasRect.left;
+    const py = t.clientY - canvasRect.top;
+    lastPointer = bhMode ? { x: px, y: py - BH_TOUCH_LIFT } : { x: px, y: py };
   }
   if (bhMode) return;
   const touch = findTrackedTouch(e.touches);
@@ -2020,20 +2026,30 @@ function drawTargetModeOverlay(ctx, now) {
   ctx.save();
   if (lastPointer) {
     const p = lastPointer;
-    const cr = 12;
-    ctx.strokeStyle = 'rgba(200, 140, 255, 0.95)';
-    ctx.lineWidth = 1.6;
-    ctx.shadowColor = 'rgba(190, 120, 255, 0.9)';
-    ctx.shadowBlur = 8;
+    const pulse = 0.9 + 0.1 * Math.sin(now * 0.01);
+    const cr = 17 * pulse;
+    ctx.shadowColor = 'rgba(190, 120, 255, 0.95)';
+    ctx.shadowBlur = 16;
+    ctx.strokeStyle = 'rgba(220, 160, 255, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, cr + 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(200, 140, 255, 1)';
+    ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.arc(p.x, p.y, cr, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-      ctx.moveTo(p.x + Math.cos(a) * (cr + 6), p.y + Math.sin(a) * (cr + 6));
-      ctx.lineTo(p.x + Math.cos(a) * (cr + 11), p.y + Math.sin(a) * (cr + 11));
+      ctx.moveTo(p.x + Math.cos(a) * (cr + 4), p.y + Math.sin(a) * (cr + 4));
+      ctx.lineTo(p.x + Math.cos(a) * (cr + 15), p.y + Math.sin(a) * (cr + 15));
     }
     ctx.stroke();
+    ctx.fillStyle = 'rgba(235, 200, 255, 1)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
   }
   if (bhHover && !bhHover.body.isRemoved) {
     const x = bhHover.body.position.x;
