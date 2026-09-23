@@ -75,6 +75,7 @@ let renderPreviewX = null;
 let dragOriginX = null;
 let dragStartPreviewX = 0;
 let touchActiveId = null;
+let suppressEndDrop = false;
 let lastTouchTime = -9999;
 const TOUCH_MOUSE_GUARD = 700;
 let comboCount = 0;
@@ -97,13 +98,10 @@ const COLLECTION_GAP = 6;
 const COLLECTION_ARC = 0.24;
 
 const BOOSTER_DEFS = {
-  antigravity: { unlockLevel: 10 },
   blackhole: { unlockLevel: 8 }
 };
-const BOOSTER_NAMES = { antigravity: 'Антигравитация', blackhole: 'Черная дыра' };
-const AG_DURATION = 4000;
+const BOOSTER_NAMES = { blackhole: 'Черная дыра' };
 const BH_DURATION = 620;
-const AG_FLOAT_SPEED = 1.0;
 const BH_TOUCH_LIFT = 72;
 
 const boosterEls = {};
@@ -115,9 +113,8 @@ const adMessageEl = document.getElementById('ad-message');
 const adProgressBarEl = document.getElementById('ad-progress-bar');
 const adCloseBtn = document.getElementById('ad-close-btn');
 const adRewardEl = document.getElementById('ad-reward');
-let boosterCharges = { antigravity: 1, blackhole: 1 };
+let boosterCharges = { blackhole: 1 };
 let boostersUnlocked = {};
-let agActive = null;
 let bhMode = false;
 let bhHover = null;
 let lastPointer = null;
@@ -830,18 +827,33 @@ function touchEndedForTracked(changed) {
 
 function handleTouchStart(e) {
   if (isGameOver || adJob) return;
-  if (e.touches.length > 1) return;
-  const touch = e.touches[0];
-  const x = touch.clientX - canvasRect.left;
-  const y = touch.clientY - canvasRect.top;
-  lastPointer = { x, y };
-  touchActiveId = touch.identifier;
   lastTouchTime = performance.now();
+  const added = e.changedTouches[0];
+  const ax = added.clientX - canvasRect.left;
+  const ay = added.clientY - canvasRect.top;
+
+  if (e.touches.length > 1) {
+    if (touchActiveId !== null) {
+      lastPointer = { x: ax, y: ay };
+      suppressEndDrop = true;
+      if (bhMode) {
+        lastPointer = { x: ax, y: ay - BH_TOUCH_LIFT };
+        attemptBlackHoleConsume(ax, ay);
+      } else {
+        dropSlime();
+      }
+      return;
+    }
+  }
+
+  if (touchActiveId !== null) return;
+  lastPointer = { x: ax, y: ay };
+  touchActiveId = added.identifier;
   if (bhMode) {
-    lastPointer = { x, y: y - BH_TOUCH_LIFT };
+    lastPointer = { x: ax, y: ay - BH_TOUCH_LIFT };
     return;
   }
-  dragOriginX = x;
+  dragOriginX = ax;
   dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
   targetX = dragStartPreviewX;
   updatePreviewPosition();
@@ -870,18 +882,21 @@ function handleTouchEnd(e) {
   if (!touchEndedForTracked(e.changedTouches)) return;
   touchActiveId = null;
   dragOriginX = null;
+  const endDrop = suppressEndDrop;
+  suppressEndDrop = false;
   if (isGameOver) return;
   if (bhMode) {
-    if (lastPointer) attemptBlackHoleConsume(lastPointer.x, lastPointer.y);
+    if (!endDrop && lastPointer) attemptBlackHoleConsume(lastPointer.x, lastPointer.y);
     return;
   }
-  dropSlime();
+  if (!endDrop) dropSlime();
 }
 
 function handleTouchCancel() {
   lastTouchTime = performance.now();
   touchActiveId = null;
   dragOriginX = null;
+  suppressEndDrop = false;
 }
 
 function handleKeyDown(e) {
@@ -1111,18 +1126,6 @@ function containSlimes() {
     }
 
     if (pos.y < bowlYTop) {
-      if (agActive) {
-        const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
-        const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
-        Body.setPosition(slime.body, {
-          x: Math.abs(pos.x - bowlCenterX) > safe ? limit : pos.x,
-          y: bowlYTop + r
-        });
-        if (slime.body.velocity.y < 0) {
-          Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: slime.body.velocity.y * -0.2 });
-        }
-        continue;
-      }
       if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r + BOWL_EDGE_TOLERANCE) {
         slime.flownOut = true;
       } else if (slime.body.velocity.y < 0) {
@@ -1133,7 +1136,7 @@ function containSlimes() {
 
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
     const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
-    if (over > t + BOWL_EDGE_TOLERANCE && !agActive) {
+    if (over > t + BOWL_EDGE_TOLERANCE) {
       slime.flownOut = true;
       continue;
     }
@@ -1485,22 +1488,12 @@ function onBoosterClick(key) {
     exitBlackHoleMode(false);
     return;
   }
-  if (key === 'antigravity' && agActive) {
-    stopAntigravity();
-    return;
-  }
   if (!boostersUnlocked[key]) {
     sfx.playBoosterDenied();
     return;
   }
   if (boosterCharges[key] > 0) {
-    if (key === 'antigravity') {
-      if (bhMode) exitBlackHoleMode(false);
-      startAntigravity();
-    } else {
-      if (agActive) stopAntigravity();
-      enterBlackHoleMode();
-    }
+    enterBlackHoleMode();
   } else {
     startRewardAd(key);
   }
@@ -1512,7 +1505,7 @@ function updateBoosterUI() {
     if (!btn) continue;
     const unlocked = !!boostersUnlocked[key];
     const count = boosterCharges[key] | 0;
-    const active = (key === 'antigravity' && !!agActive) || (key === 'blackhole' && bhMode);
+    const active = (key === 'blackhole' && bhMode);
     btn.classList.toggle('locked', !unlocked);
     btn.classList.toggle('active', active);
     const countEl = btn.querySelector('.booster-count');
@@ -1531,7 +1524,7 @@ function updateBoosterUI() {
 }
 
 function positionBoosterStickers() {
-  if (!canvasRect || !boosterEls.antigravity) return;
+  if (!canvasRect || !boosterEls.blackhole) return;
   const rb = document.getElementById('restart-btn');
   const keys = Object.keys(BOOSTER_DEFS);
   const gap = 12;
@@ -1585,48 +1578,9 @@ function restoreGravity() {
 function stopBoosterEffects() {
   restoreGravity();
   setTimescale(1);
-  agActive = null;
   bhMode = false;
   bhHover = null;
   if (canvas) canvas.style.cursor = '';
-}
-
-function startAntigravity() {
-  if (agActive || isGameOver) return;
-  consumeBooster('antigravity');
-  agActive = { start: performance.now(), until: performance.now() + AG_DURATION };
-  if (engine) engine.world.gravity.y = 0.18;
-  sfx.playAntigravity();
-  updateBoosterUI();
-}
-
-function stopAntigravity() {
-  if (!agActive) return;
-  restoreGravity();
-  agActive = null;
-  sfx.playAntigravityEnd();
-  updateBoosterUI();
-}
-
-function updateAntigravity(now) {
-  if (!agActive) return;
-  if (now >= agActive.until) {
-    stopAntigravity();
-    return;
-  }
-  const t = now - agActive.start;
-  for (const slime of slimes) {
-    if (slime.body.isRemoved || slime.mergeAnim || slime.flownOut) continue;
-    const mass = slime.body.mass;
-    const pos = slime.body.position;
-    if (slime.config.level <= 4) {
-      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.004 + slime.seed * 7) * mass * 0.012, y: -mass * 0.2 });
-      if (slime.body.velocity.y < -AG_FLOAT_SPEED) {
-        Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: -AG_FLOAT_SPEED });
-      }
-      if (slime.elastic < 0.1) slime.elastic += 0.005;
-    }
-  }
 }
 
 function enterBlackHoleMode() {
@@ -1973,7 +1927,6 @@ function gameLoop() {
     updateAmbientParticles(dt);
     updateMergeEffects(dt);
     updateSlimesVisual(dt);
-    updateAntigravity(now);
     checkGameOver();
   }
   updateTargetHover();
@@ -1995,7 +1948,6 @@ function renderCustom() {
   drawStars(ctx, now);
   drawDust(ctx, now);
   drawBowl(ctx);
-  drawAntigravityOverlay(ctx, now);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
   drawDropTrail(ctx, now);
@@ -2004,36 +1956,6 @@ function renderCustom() {
   drawTargetModeOverlay(ctx, now);
   drawAmbientParticles(ctx, now);
   drawComboOverlay(ctx, now);
-}
-
-function drawAntigravityOverlay(ctx, now) {
-  if (!agActive) return;
-  const remain = agActive.until - now;
-  const progress = Math.max(0, Math.min(1, 1 - remain / AG_DURATION));
-  const alpha = 0.1 + 0.05 * Math.sin(now * 0.005);
-  ctx.save();
-  const grad = ctx.createLinearGradient(0, bowlYTop, 0, bowlYBottom);
-  grad.addColorStop(0, `rgba(120, 255, 190, ${0.5 * alpha})`);
-  grad.addColorStop(1, 'rgba(120, 255, 190, 0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(bowlCenterX - bowlHalfTop, bowlYTop);
-  ctx.lineTo(bowlCenterX + bowlHalfTop, bowlYTop);
-  ctx.lineTo(bowlCenterX + bowlHalfBottom, bowlYBottom);
-  ctx.lineTo(bowlCenterX - bowlHalfBottom, bowlYBottom);
-  ctx.closePath();
-  ctx.fill();
-  const labelY = bowlYTop - 14;
-  const fw = bowlHalfTop * 0.7;
-  ctx.fillStyle = `rgba(140, 255, 195, ${0.85 + 0.15 * Math.sin(now * 0.006)})`;
-  ctx.font = '800 12px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('АНТИГРАВИТАЦИЯ', bowlCenterX, labelY);
-  ctx.fillStyle = 'rgba(140, 255, 195, 0.55)';
-  ctx.fillRect(bowlCenterX - fw / 2, labelY + 4, fw, 3);
-  ctx.fillStyle = 'rgba(180, 255, 220, 0.95)';
-  ctx.fillRect(bowlCenterX - fw / 2, labelY + 4, Math.max(2, fw * progress), 3);
-  ctx.restore();
 }
 
 function drawBlackHoles(ctx, now) {

@@ -365,25 +365,6 @@ class SlimeSfx {
     this._osc('sine', 55, t, 0.12, 0.02, 0.7);
   }
 
-  playAntigravity() {
-    if (!this._ready()) return;
-    const c = this.ctx;
-    const t = c.currentTime;
-    this._sweep('sine', 110, 480, t, 0.55, 0.09);
-    this._sweep('triangle', 220, 980, t + 0.06, 0.5, 0.045);
-    this._burst(t, 0.05, 0.05, 0.5, { type: 'highpass', f0: 2400, f1: 4800, q: 0.8 });
-    this._haptic(25);
-  }
-
-  playAntigravityEnd() {
-    if (!this._ready()) return;
-    const c = this.ctx;
-    const t = c.currentTime;
-    this._sweep('sine', 420, 90, t, 0.32, 0.07);
-    this._burst(t, 0.07, 0.008, 0.22, { type: 'lowpass', f0: 700, q: 1 });
-    this._haptic(15);
-  }
-
   playBlackHoleArm() {
     if (!this._ready()) return;
     const c = this.ctx;

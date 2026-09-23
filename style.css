@@ -55,6 +55,29 @@ html, body {
   touch-action: manipulation;
 }
 
+html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-touch-callout: none;
+}
+
+button,
+input,
+[role='button'],
+.lb-toggle,
+.restart-btn,
+.booster-btn,
+.neon-btn,
+.lb-close,
+.lb-collapse {
+  touch-action: manipulation;
+}
+
+canvas {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 body::before {
   content: '';
   position: fixed;
@@ -1316,14 +1339,6 @@ body::before {
 
 .booster-btn:active:not(.locked) {
   transform: scale(0.92);
-}
-
-.booster-btn.booster-antigravity.active {
-  border-color: rgba(140, 255, 190, 0.9);
-  color: #b4ffd6;
-  box-shadow:
-    0 0 14px rgba(90, 255, 170, 0.55),
-    inset 0 0 12px rgba(90, 255, 170, 0.18);
 }
 
 .booster-btn.booster-blackhole.active {
