@@ -22,7 +22,6 @@ const {
 
 const canvas = document.getElementById('game-canvas');
 const previewEl = document.getElementById('preview-slime');
-const dropZoneIndicator = document.getElementById('drop-zone-indicator');
 const scoreEl = document.getElementById('score');
 const maxLevelEl = document.getElementById('max-level');
 const highScoreEl = document.getElementById('high-score');
@@ -928,11 +927,6 @@ function updatePreviewPosition() {
 
   previewEl.style.left = clampedX + 'px';
   previewEl.style.transform = 'translateX(-50%)';
-
-  const r = currentPreviewConfig ? currentPreviewConfig.radius * layoutScale : 0;
-  const halfWidth = Math.max(0, bowlW() / 2 - r * 0.5 - DROP_EDGE_INSET);
-  dropZoneIndicator.style.left = (centerX - halfWidth) + 'px';
-  dropZoneIndicator.style.width = (halfWidth * 2) + 'px';
 }
 
 function stylePreviewElement(el, config, size, glow) {
@@ -2345,6 +2339,7 @@ function drawBowl(ctx) {
   ctx.save();
   curveInner();
   ctx.clip();
+
   const glowR = Math.max(1, bb * 1.3);
   ctx.save();
   ctx.translate(centerX, yB);
@@ -2360,24 +2355,18 @@ function drawBowl(ctx) {
   ctx.restore();
 
   const archGrad = ctx.createLinearGradient(0, yT - t * 2, 0, yT + t * 2);
-  archGrad.addColorStop(0, 'rgba(140, 210, 255, 0.14)');
-  archGrad.addColorStop(0.6, 'rgba(110, 170, 255, 0.05)');
-  archGrad.addColorStop(1, 'rgba(110, 170, 255, 0)');
+  archGrad.addColorStop(0, 'rgba(205, 140, 255, 0.18)');
+  archGrad.addColorStop(0.6, 'rgba(160, 100, 255, 0.06)');
+  archGrad.addColorStop(1, 'rgba(160, 100, 255, 0)');
   ctx.fillStyle = archGrad;
-  ctx.fillRect(centerX - bt - 2, yT - t * 2.5, bt * 2 + 4, t * 5);
+  ctx.fillRect(0, 0, canvasRect.width, canvasRect.height);
 
   const paneGrad = ctx.createLinearGradient(0, yT, 0, bottomY);
-  paneGrad.addColorStop(0, 'rgba(150, 220, 255, 0.06)');
-  paneGrad.addColorStop(0.55, 'rgba(90, 130, 255, 0.03)');
-  paneGrad.addColorStop(1, 'rgba(210, 170, 255, 0.06)');
+  paneGrad.addColorStop(0, 'rgba(200, 150, 255, 0.07)');
+  paneGrad.addColorStop(0.55, 'rgba(150, 90, 255, 0.04)');
+  paneGrad.addColorStop(1, 'rgba(220, 170, 255, 0.08)');
   ctx.fillStyle = paneGrad;
-  ctx.fillRect(centerX - bb - 2, yT - t * 2, bb * 2 + 4, bottomY - yT + t * 2);
-
-  const floorGrad = ctx.createLinearGradient(0, yB, 0, bottomY);
-  floorGrad.addColorStop(0, 'rgba(140, 240, 255, 0.22)');
-  floorGrad.addColorStop(1, 'rgba(120, 90, 255, 0)');
-  ctx.fillStyle = floorGrad;
-  ctx.fillRect(centerX - bb, yB, bb * 2, t * 2 + 8);
+  ctx.fillRect(0, 0, canvasRect.width, canvasRect.height);
   ctx.restore();
 
   // 2.5 Soft slime-coloured light pooling on the bottom glass
