@@ -2600,7 +2600,7 @@ function drawSlimes(ctx, now) {
       glowColor = hslToHex(hue, 100, 65);
       strokeColor = hslToHex(hue, 100, 75);
     }
-    const glowBlur = Math.min(32, (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale));
+    const glowBlur = Math.min(32, (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale)) * 0.75;
 
     const opacity = slime.opacity !== undefined ? slime.opacity : 1;
 
@@ -2705,7 +2705,7 @@ function drawAura(ctx, config, r, now, opacity, glowColor) {
   const aura = config.aura;
   if (!aura) return;
   ctx.save();
-  ctx.globalAlpha = opacity * 0.5 * aura;
+  ctx.globalAlpha = opacity * 0.5 * aura * 0.75;
   for (let i = 0; i < 3; i++) {
     const a = now * 0.001 * (0.7 + i * 0.3) + i * 2.1;
     const ar = r * 1.12 + Math.sin(now * 0.002 + i * 2.4) * r * 0.28;
