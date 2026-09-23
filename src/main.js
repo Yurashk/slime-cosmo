@@ -62,13 +62,13 @@ let maxLevelReached = 1;
 let isGameOver = false;
 let lastDropTime = 0;
 let lastFrameTime = 0;
-const DROP_COOLDOWN = 400;
+const DROP_COOLDOWN = 700;
 let mouseX = 0;
 let canvasRect = null;
 let ctx = null;
 let dpr = 1;
 let layoutScale = 1;
-let bowlCenterX = 0, bowlYTop = 0, bowlYBottom = 0, bowlHalfTop = 0, bowlHalfBottom = 0;
+let bowlCenterX = 0, bowlYTop = 0, bowlYBottom = 0, bowlHalfTop = 0, bowlHalfBottom = 0, bowlHalfBody = 0, bowlHalfLip = 0, bowlLipH = 0;
 let lastBowlWidth = 0;
 let targetX = null;
 let renderPreviewX = null;
@@ -103,7 +103,7 @@ const BOOSTER_DEFS = {
 const BOOSTER_NAMES = { antigravity: 'Антигравитация', blackhole: 'Черная дыра' };
 const AG_DURATION = 4000;
 const BH_DURATION = 620;
-const AG_FLOAT_SPEED = 3.2;
+const AG_FLOAT_SPEED = 1.0;
 const BH_TOUCH_LIFT = 72;
 
 const boosterEls = {};
@@ -586,6 +586,7 @@ function updateCanvasRect() {
   }
   updateCollectionRect();
   lastBowlWidth = canvasRect.width;
+  positionBoosterStickers();
 }
 
 function rebuildBowl() {
@@ -690,17 +691,37 @@ function createWall(sign, bb, bt, yB, yT, thickness, centerX, options) {
   );
 }
 
-function createBowl() {
+function computeBowlGeometry() {
   const centerX = canvasRect.width / 2;
   const bottomY = canvasRect.height - 100;
   const t = wallT();
-  const topWidth = bowlW();
-  const bottomWidth = bowlW() * 0.7;
   const wallHeight = bowlH();
+  const topWidth = bowlW();
+  const bottomWidth = topWidth * 0.7;
   const bb = bottomWidth / 2;
   const bt = topWidth / 2;
   const yB = bottomY - t;
   const yT = bottomY - t - wallHeight;
+  const L = Math.hypot(bt - bb, wallHeight);
+  return {
+    centerX, bottomY, t, wallHeight, topWidth, bottomWidth, bb, bt, yB, yT, L,
+    ox: (wallHeight / L) * t,
+    oy: ((bt - bb) / L) * t
+  };
+}
+
+function bowlProfile() {
+  const g = computeBowlGeometry();
+  const { bt, bb, yT, yB, wallHeight } = g;
+  const lipH = Math.max(18, wallHeight * 0.11);
+  const lipTan = Math.tan((24 * Math.PI) / 180);
+  const bt2 = bt - ((bt - bb) / wallHeight) * lipH;
+  const btM = bt2 + lipH * lipTan;
+  return { ...g, lipH, bt2, btM };
+}
+
+function createBowl() {
+  const { centerX, bottomY, t, bottomWidth, bb, bt, yB, yT, lipH, bt2, btM } = bowlProfile();
 
   const bowlOptions = {
     isStatic: true,
@@ -714,17 +735,23 @@ function createBowl() {
     chamfer: { radius: Math.max(4, (t / 2) * 0.9) }
   });
 
-  bowlLeft = createWall(-1, bb, bt, yB, yT, t, centerX, bowlOptions);
-  bowlRight = createWall(1, bb, bt, yB, yT, t, centerX, bowlOptions);
+  const bodyTopY = yT + lipH;
+  bowlLeft = createWall(-1, bb, bt2, yB, bodyTopY, t, centerX, bowlOptions);
+  bowlRight = createWall(1, bb, bt2, yB, bodyTopY, t, centerX, bowlOptions);
+  const bowlLeftLip = createWall(-1, bt2, btM, bodyTopY, yT, t, centerX, bowlOptions);
+  const bowlRightLip = createWall(1, bt2, btM, bodyTopY, yT, t, centerX, bowlOptions);
 
   bowlCenterX = centerX;
   bowlYTop = yT;
   bowlYBottom = bottomY;
-  bowlHalfTop = bt;
+  bowlHalfTop = btM;
+  bowlHalfBody = bt;
+  bowlHalfLip = bt2;
   bowlHalfBottom = bb;
+  bowlLipH = lipH;
 
   bowlBody = Body.create({
-    parts: [bowlBottom, bowlLeft, bowlRight],
+    parts: [bowlBottom, bowlLeft, bowlRight, bowlLeftLip, bowlRightLip],
     isStatic: true,
     frictionAir: 0,
     collisionFilter: { category: BOWL_CATEGORY, mask: SLIME_CATEGORY | BOWL_CATEGORY }
@@ -1060,8 +1087,12 @@ const tentacleKeyOf = (a, b) => bodyTid(a.body) * 1048576 + bodyTid(b.body);
 function bowlSafeHalfWidth(y) {
   const span = bowlYBottom - bowlYTop;
   if (span <= 0) return bowlHalfTop;
-  const t = Math.max(0, Math.min(1, (bowlYBottom - y) / span));
-  return bowlHalfBottom + t * (bowlHalfTop - bowlHalfBottom);
+  if (y >= bowlYTop + bowlLipH) {
+    const t = Math.max(0, Math.min(1, (bowlYBottom - y) / span));
+    return bowlHalfBottom + t * (bowlHalfBody - bowlHalfBottom);
+  }
+  const f = Math.max(0, Math.min(1, (y - bowlYTop) / bowlLipH));
+  return bowlHalfTop + f * (bowlHalfLip - bowlHalfTop);
 }
 
 function containSlimes() {
@@ -1080,6 +1111,18 @@ function containSlimes() {
     }
 
     if (pos.y < bowlYTop) {
+      if (agActive) {
+        const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
+        const limit = bowlCenterX + (pos.x >= bowlCenterX ? safe : -safe);
+        Body.setPosition(slime.body, {
+          x: Math.abs(pos.x - bowlCenterX) > safe ? limit : pos.x,
+          y: bowlYTop + r
+        });
+        if (slime.body.velocity.y < 0) {
+          Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: slime.body.velocity.y * -0.2 });
+        }
+        continue;
+      }
       if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r + BOWL_EDGE_TOLERANCE) {
         slime.flownOut = true;
       } else if (slime.body.velocity.y < 0) {
@@ -1090,7 +1133,7 @@ function containSlimes() {
 
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
     const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
-    if (over > t + BOWL_EDGE_TOLERANCE) {
+    if (over > t + BOWL_EDGE_TOLERANCE && !agActive) {
       slime.flownOut = true;
       continue;
     }
@@ -1433,6 +1476,7 @@ function setupBoostersUI() {
   }
   if (adCloseBtn) adCloseBtn.addEventListener('click', closeAdOverlay);
   updateBoosterUI();
+  positionBoosterStickers();
 }
 
 function onBoosterClick(key) {
@@ -1473,7 +1517,7 @@ function updateBoosterUI() {
     btn.classList.toggle('active', active);
     const countEl = btn.querySelector('.booster-count');
     const badgeEl = btn.querySelector('.booster-badge');
-    if (countEl) countEl.textContent = `x${count}`;
+    if (countEl) countEl.textContent = String(count);
     if (countEl) countEl.classList.toggle('hidden', !unlocked || count === 0);
     if (badgeEl) badgeEl.classList.toggle('hidden', unlocked && count > 0);
     const hintText = !unlocked
@@ -1483,6 +1527,23 @@ function updateBoosterUI() {
         : `${BOOSTER_NAMES[key]} — посмотреть рекламу и получить +1`;
     btn.dataset.hint = hintText;
     btn.title = hintText;
+  }
+}
+
+function positionBoosterStickers() {
+  if (!canvasRect || !boosterEls.antigravity) return;
+  const rb = document.getElementById('restart-btn');
+  const keys = Object.keys(BOOSTER_DEFS);
+  const gap = 12;
+  let top = (rb ? rb.getBoundingClientRect().bottom - canvasRect.top : 56) + gap;
+  for (const key of keys) {
+    const btn = boosterEls[key];
+    if (!btn) continue;
+    const w = btn.offsetWidth || 40;
+    const h = btn.offsetHeight || 40;
+    btn.style.left = Math.max(0, Math.round(canvasRect.width - w)) + 'px';
+    btn.style.top = Math.round(top) + 'px';
+    top += h + gap;
   }
 }
 
@@ -1559,14 +1620,11 @@ function updateAntigravity(now) {
     const mass = slime.body.mass;
     const pos = slime.body.position;
     if (slime.config.level <= 4) {
-      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.004 + slime.seed * 7) * mass * 0.05, y: -mass * 0.55 });
+      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.004 + slime.seed * 7) * mass * 0.012, y: -mass * 0.2 });
       if (slime.body.velocity.y < -AG_FLOAT_SPEED) {
         Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: -AG_FLOAT_SPEED });
       }
-      if (slime.elastic < 0.1) slime.elastic += 0.012;
-    } else {
-      Body.applyForce(slime.body, pos, { x: Math.sin(t * 0.011 + slime.seed * 13) * mass * 0.22, y: mass * 0.72 });
-      if (slime.elastic < 0.16) slime.elastic = Math.min(0.16, slime.elastic + 0.02);
+      if (slime.elastic < 0.1) slime.elastic += 0.005;
     }
   }
 }
@@ -2238,99 +2296,270 @@ function drawStars(ctx, now) {
   }
 }
 
+function tracePoly(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+}
+
+function roundedPolygon(ctx, pts, radius) {
+  const n = pts.length;
+  const r = Math.max(1, radius);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const a = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const b = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const rr = Math.min(r, (a - 1) / 2, (b - 1) / 2);
+    const inX = (cur.x - prev.x) / a, inY = (cur.y - prev.y) / a;
+    const outX = (next.x - cur.x) / b, outY = (next.y - cur.y) / b;
+    const sx = cur.x - inX * rr, sy = cur.y - inY * rr;
+    const ex = cur.x + outX * rr, ey = cur.y + outY * rr;
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    ctx.arcTo(cur.x, cur.y, ex, ey, rr);
+  }
+  ctx.closePath();
+}
+
 function drawBowl(ctx) {
   if (!bowlBody) return;
-
-  const centerX = canvasRect.width / 2;
-  const bottomY = canvasRect.height - 100;
-  const t = wallT();
-  const topWidth = bowlW();
-  const bottomWidth = bowlW() * 0.7;
-  const wallHeight = bowlH();
-
-  const bb = bottomWidth / 2;
-  const bt = topWidth / 2;
-  const yB = bottomY - t;
-  const yT = bottomY - t - wallHeight;
-
-  const L = Math.hypot(bt - bb, wallHeight);
-  const ox = (wallHeight / L) * t;
-  const oy = ((bt - bb) / L) * t;
-
-  const slab = [
-    { x: centerX - bt - ox, y: yT + oy },
-    { x: centerX + bt + ox, y: yT + oy },
-    { x: centerX + bb + ox, y: yB + oy },
-    { x: centerX + bottomWidth / 2, y: bottomY },
-    { x: centerX - bottomWidth / 2, y: bottomY },
-    { x: centerX - bb - ox, y: yB + oy }
-  ];
-  const cavity = [
-    { x: centerX - bt, y: yT },
-    { x: centerX + bt, y: yT },
-    { x: centerX + bb, y: yB },
-    { x: centerX - bb, y: yB }
-  ];
-
-  const trace = (pts) => {
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i].x, pts[i].y);
-    }
-    ctx.closePath();
-  };
-
-  ctx.save();
-
-  trace(slab);
-  const bodyGrad = ctx.createLinearGradient(0, yT + oy, 0, bottomY);
-  bodyGrad.addColorStop(0, 'rgba(52, 78, 170, 0.42)');
-  bodyGrad.addColorStop(0.55, 'rgba(32, 46, 120, 0.5)');
-  bodyGrad.addColorStop(1, 'rgba(10, 14, 48, 0.65)');
-  ctx.fillStyle = bodyGrad;
-  ctx.fill();
+  const { centerX, bottomY, t, wallHeight, bb, bt, yB, yT, ox, oy, lipH, bt2, btM } = bowlProfile();
 
   const now = performance.now();
   const pulse = 0.5 + 0.35 * Math.sin(now * 0.004);
 
-  trace(cavity);
-  ctx.strokeStyle = '#00e5ff';
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = '#00e5ff';
-  ctx.shadowBlur = 8 + 5 * pulse;
-  ctx.globalAlpha = 0.5 + 0.2 * pulse;
-  ctx.stroke();
+  const BOW = Math.max(3, Math.min(8, wallHeight * 0.022));
 
-  ctx.beginPath();
-  ctx.moveTo(centerX - bt, yT);
-  ctx.lineTo(centerX + bt, yT);
-  ctx.strokeStyle = `rgba(170, 245, 255, ${0.55 + 0.15 * pulse})`;
-  ctx.lineWidth = 4;
-  ctx.shadowBlur = 10 + 5 * pulse;
-  ctx.stroke();
+  const halfAt = (y) => (y >= yT + lipH
+    ? bb + ((yB - y) / (yB - yT)) * (bt - bb)
+    : btM + Math.max(0, Math.min(1, (y - yT) / lipH)) * (bt2 - btM));
 
-  trace(slab);
-  ctx.globalAlpha = 0.3;
-  ctx.strokeStyle = 'rgba(0, 170, 240, 0.5)';
-  ctx.lineWidth = 1.4;
-  ctx.shadowBlur = 3;
-  ctx.stroke();
+  const curveShell = () => {
+    const A_l = { x: centerX - bt - ox, y: yT + oy };
+    const A_r = { x: centerX + bt + ox, y: yT + oy };
+    const B_l = { x: centerX - bb - ox, y: yB + oy };
+    const B_r = { x: centerX + bb + ox, y: yB + oy };
+    const C_l = { x: centerX - bb, y: bottomY };
+    const C_r = { x: centerX + bb, y: bottomY };
+    const ctrlL = { x: (A_l.x + B_l.x) / 2 - BOW * 2, y: (A_l.y + B_l.y) / 2 };
+    const ctrlR = { x: (A_r.x + B_r.x) / 2 + BOW * 2, y: (A_r.y + B_r.y) / 2 };
+    const ctrlT = { x: (A_l.x + A_r.x) / 2, y: A_l.y - t * 1.05 };
+    const R = Math.max(5, t * 0.32);
+    const segs = [
+      { a: A_l, b: A_r, ctrl: ctrlT },
+      { a: A_r, b: B_r, ctrl: ctrlR },
+      { a: B_r, b: C_r, ctrl: null },
+      { a: C_r, b: C_l, ctrl: null },
+      { a: C_l, b: B_l, ctrl: null },
+      { a: B_l, b: A_l, ctrl: ctrlL }
+    ];
+    const tEnd = (s) => {
+      const dx = s.ctrl ? s.b.x - s.ctrl.x : s.b.x - s.a.x;
+      const dy = s.ctrl ? s.b.y - s.ctrl.y : s.b.y - s.a.y;
+      const l = Math.hypot(dx, dy) || 1;
+      return { x: dx / l, y: dy / l };
+    };
+    const tStart = (s) => {
+      const dx = s.ctrl ? s.ctrl.x - s.a.x : s.b.x - s.a.x;
+      const dy = s.ctrl ? s.ctrl.y - s.a.y : s.b.y - s.a.y;
+      const l = Math.hypot(dx, dy) || 1;
+      return { x: dx / l, y: dy / l };
+    };
+    const S = segs.map((s, i) => {
+      const din = tEnd(segs[(i - 1 + segs.length) % segs.length]);
+      return { x: s.a.x - din.x * R, y: s.a.y - din.y * R };
+    });
+    const E = segs.map((s, i) => {
+      const dout = tStart(s);
+      return { x: s.a.x + dout.x * R, y: s.a.y + dout.y * R };
+    });
+    ctx.beginPath();
+    ctx.moveTo(S[0].x, S[0].y);
+    for (let i = 0; i < segs.length; i++) {
+      ctx.arcTo(segs[i].a.x, segs[i].a.y, E[i].x, E[i].y, Math.max(0.5, R));
+      const next = (i + 1) % segs.length;
+      if (segs[i].ctrl) ctx.quadraticCurveTo(segs[i].ctrl.x, segs[i].ctrl.y, S[next].x, S[next].y);
+      else ctx.lineTo(S[next].x, S[next].y);
+    }
+    ctx.closePath();
+  };
+
+  const curveInner = () => {
+    const topBow = Math.max(6, t * 1.05);
+    ctx.beginPath();
+    ctx.moveTo(centerX - btM, yT);
+    ctx.quadraticCurveTo(centerX, yT - topBow, centerX + btM, yT);
+    ctx.lineTo(centerX + bt2, yT + lipH);
+    ctx.lineTo(centerX + bb, yB);
+    ctx.lineTo(centerX - bb, yB);
+    ctx.lineTo(centerX - bt2, yT + lipH);
+    ctx.closePath();
+  };
+
+  const cavity = [
+    { x: centerX - btM, y: yT },
+    { x: centerX + btM, y: yT },
+    { x: centerX + bt2, y: yT + lipH },
+    { x: centerX + bb, y: yB },
+    { x: centerX - bb, y: yB },
+    { x: centerX - bt2, y: yT + lipH }
+  ];
 
   ctx.save();
-  trace(slab);
+
+  // 1. Glass casing: rounded organic shell with navy/navy-blue depth
+  curveShell();
+  const bodyGrad = ctx.createLinearGradient(0, yT + oy, 0, bottomY);
+  bodyGrad.addColorStop(0, 'rgba(46, 74, 168, 0.32)');
+  bodyGrad.addColorStop(0.5, 'rgba(24, 38, 108, 0.42)');
+  bodyGrad.addColorStop(1, 'rgba(8, 13, 46, 0.62)');
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  // 2. Energy chamber interior: one continuous glass surface with an arched top
+  ctx.save();
+  curveInner();
   ctx.clip();
-  const bandY = yT + wallHeight * 0.28;
-  const band = ctx.createLinearGradient(0, bandY - 26, 0, bandY + 26);
-  band.addColorStop(0, 'rgba(255,255,255,0)');
-  band.addColorStop(0.5, 'rgba(255,255,255,0.07)');
-  band.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = band;
-  ctx.globalAlpha = 1;
-  ctx.fillRect(centerX - bt - ox, bandY - 26, (bt + ox) * 2, 52);
+  const glowR = Math.max(1, bb * 1.3);
+  ctx.save();
+  ctx.translate(centerX, yB);
+  ctx.scale(1, 0.4);
+  const bottomGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
+  bottomGlow.addColorStop(0, `rgba(150, 92, 255, ${0.26 + 0.04 * Math.sin(now * 0.003)})`);
+  bottomGlow.addColorStop(0.45, 'rgba(52, 150, 255, 0.12)');
+  bottomGlow.addColorStop(1, 'rgba(24, 34, 130, 0)');
+  ctx.fillStyle = bottomGlow;
+  ctx.beginPath();
+  ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const archGrad = ctx.createLinearGradient(0, yT - t * 2, 0, yT + t * 2);
+  archGrad.addColorStop(0, 'rgba(140, 210, 255, 0.14)');
+  archGrad.addColorStop(0.6, 'rgba(110, 170, 255, 0.05)');
+  archGrad.addColorStop(1, 'rgba(110, 170, 255, 0)');
+  ctx.fillStyle = archGrad;
+  ctx.fillRect(centerX - bt - 2, yT - t * 2.5, bt * 2 + 4, t * 5);
+
+  const paneGrad = ctx.createLinearGradient(0, yT, 0, bottomY);
+  paneGrad.addColorStop(0, 'rgba(150, 220, 255, 0.06)');
+  paneGrad.addColorStop(0.55, 'rgba(90, 130, 255, 0.03)');
+  paneGrad.addColorStop(1, 'rgba(210, 170, 255, 0.06)');
+  ctx.fillStyle = paneGrad;
+  ctx.fillRect(centerX - bb - 2, yT - t * 2, bb * 2 + 4, bottomY - yT + t * 2);
+
+  const floorGrad = ctx.createLinearGradient(0, yB, 0, bottomY);
+  floorGrad.addColorStop(0, 'rgba(140, 240, 255, 0.22)');
+  floorGrad.addColorStop(1, 'rgba(120, 90, 255, 0)');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(centerX - bb, yB, bb * 2, t * 2 + 8);
+  ctx.restore();
+
+  // 2.5 Soft slime-coloured light pooling on the bottom glass
+  ctx.save();
+  tracePoly(ctx, cavity);
+  ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const slime of slimes) {
+    if (!slime.body || !slime.body.position) continue;
+    const cfg = slime.config;
+    const r = cfg.radius * layoutScale;
+    const x = slime.body.position.x;
+    const y = slime.body.position.y;
+    const floorProx = 1 - Math.max(0, Math.min(1, (yB - y) / (wallHeight * 0.5)));
+    if (floorProx < 0.05) continue;
+    const sizeBoost = Math.min(1, 0.45 + (r / (34 * layoutScale)) * 0.8);
+    const ras = Math.max(8, r * 2.4);
+    ctx.save();
+    ctx.translate(x, y + r * 0.5);
+    ctx.scale(1, 0.42);
+    const refl = ctx.createRadialGradient(0, 0, 0, 0, 0, ras);
+    refl.addColorStop(0, hexA(cfg.color, floorProx * sizeBoost * 0.32));
+    refl.addColorStop(0.5, hexA(cfg.color, floorProx * sizeBoost * 0.12));
+    refl.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = refl;
+    ctx.beginPath();
+    ctx.arc(0, 0, ras, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 2.6 Faint cyan bloom where slimes press against the glass walls
+  ctx.save();
+  for (const slime of slimes) {
+    if (!slime.body || !slime.body.position) continue;
+    const cfg = slime.config;
+    const r = cfg.radius * layoutScale;
+    const x = slime.body.position.x;
+    const y = slime.body.position.y;
+    if (y < yT - 6 || y > bottomY) continue;
+    const half = halfAt(y);
+    for (const side of [-1, 1]) {
+      const faceX = centerX + side * half;
+      const gap = Math.abs(faceX - x);
+      const touch = Math.max(0, Math.min(1, (r + 7 - gap) / 12));
+      if (touch <= 0) continue;
+      const br = Math.max(10, r * 1.1 + touch * 10);
+      const bloom = ctx.createRadialGradient(faceX, y, 0, faceX, y, br);
+      bloom.addColorStop(0, `rgba(124, 219, 255, ${0.16 * touch})`);
+      bloom.addColorStop(1, 'rgba(60, 140, 255, 0)');
+      ctx.fillStyle = bloom;
+      ctx.beginPath();
+      ctx.arc(faceX, y, br, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // 2.7 Barely-visible energy motes drifting through the empty chamber
+  ctx.save();
+  tracePoly(ctx, cavity);
+  ctx.clip();
+  for (let i = 0; i < 7; i++) {
+    const t = (now * 0.00013 + i * 0.139) % 1;
+    const y = yB - 4 - t * (yB - yT - 10);
+    const half = halfAt(y);
+    const x = centerX + (t * 2 - 1) * half * 0.78 + Math.sin(now * 0.0005 + i * 2.4) * half * 0.15;
+    const fade = 0.35 + 0.65 * (1 - Math.abs(t - 0.5) * 2);
+    const a = (0.05 + 0.05 * Math.sin(now * 0.0011 + i * 1.7)) * fade;
+    if (a <= 0.01) continue;
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(159, 219, 255, ${a})`;
+    ctx.shadowColor = '#3fc6ff';
+    ctx.shadowBlur = 4;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 3. Neon inner rim: thin pulsing cyan edge on a gentle outward bow
+  ctx.save();
+  curveInner();
+  ctx.strokeStyle = '#79e6ff';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#3fc6ff';
+  ctx.shadowBlur = 6 + 6 * pulse;
+  ctx.globalAlpha = 0.5 + 0.18 * pulse;
+  ctx.stroke();
+  ctx.restore();
+
+  // 5. Faint outer glass edge
+  ctx.save();
+  curveShell();
+  ctx.globalAlpha = 0.26;
+  ctx.strokeStyle = 'rgba(0, 175, 245, 0.55)';
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = '#0099ff';
+  ctx.shadowBlur = 4;
+  ctx.stroke();
   ctx.restore();
 
   ctx.restore();
+
 }
 
 function drawMergeEffects(ctx) {
@@ -2725,17 +2954,19 @@ function drawPlanetSurface(ctx, slime, config, R, now, p) {
     }
     case 'craters': {
       ctx.strokeStyle = 'rgba(214, 220, 230, 0.28)';
-      for (let i = 0; i < 4; i++) {
-        const a = seededRnd(slime.seed, i) * Math.PI * 2;
-        const dist = R * (0.22 + seededRnd(slime.seed, i * 2 + 1) * 0.45);
-        const cr = R * (0.09 + seededRnd(slime.seed, i * 3 + 2) * 0.13);
+      ctx.lineWidth = 1.2;
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const cr = R * (0.06 + seededRnd(slime.seed, i * 3 + 2) * 0.1);
+        const a = (i / n) * Math.PI * 2 + (seededRnd(slime.seed, i * 4 + 1) * 2 - 1) * 0.45;
+        const distMax = R * 0.9 - cr;
+        const dist = cr * 1.1 + seededRnd(slime.seed, i * 2 + 3) * (distMax - cr * 1.1);
         const cx = Math.cos(a) * dist;
-        const cy = Math.sin(a) * dist * 0.85;
+        const cy = Math.sin(a) * dist * 0.8;
         ctx.fillStyle = 'rgba(42, 46, 54, 0.55)';
         ctx.beginPath();
         ctx.arc(cx, cy, cr, 0, Math.PI * 2);
         ctx.fill();
-        ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.arc(cx - cr * 0.2, cy - cr * 0.2, cr * 0.7, 0, Math.PI * 2);
         ctx.stroke();
@@ -2758,19 +2989,20 @@ function drawPlanetSurface(ctx, slime, config, R, now, p) {
     case 'continents': {
       ctx.fillStyle = 'rgba(62, 170, 96, 0.85)';
       for (let i = 0; i < 3; i++) {
-        const a = seededRnd(slime.seed, i) * Math.PI * 2;
-        const dist = R * (0.3 + seededRnd(slime.seed, i * 2 + 1) * 0.35);
-        const bw = R * (0.24 + seededRnd(slime.seed, i * 3 + 2) * 0.22);
-        const bh = R * (0.18 + seededRnd(slime.seed, i * 4 + 3) * 0.18);
+        const a = (i / 3) * Math.PI * 2 + (seededRnd(slime.seed, i * 2 + 1) * 2 - 1) * 0.5;
+        const bw = R * (0.2 + seededRnd(slime.seed, i * 3 + 2) * 0.2);
+        const bh = R * (0.16 + seededRnd(slime.seed, i * 4 + 3) * 0.16);
+        const size = Math.max(bw, bh);
+        const dist = size * 0.5 + seededRnd(slime.seed, i * 5 + 4) * Math.max(0, R * 0.85 - size - size * 0.5);
         ctx.beginPath();
         ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist * 0.8, bw, bh, a, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       for (let i = 0; i < 3; i++) {
-        const a = seededRnd(slime.seed, i + 11) * Math.PI * 2;
-        const dist = R * (0.4 + seededRnd(slime.seed, i * 2 + 1 + 20) * 0.4);
-        const w = R * (0.2 + seededRnd(slime.seed, i + 5) * 0.16);
+        const a = ((i + 0.5) / 3) * Math.PI * 2 + (seededRnd(slime.seed, i + 20) * 2 - 1) * 0.5;
+        const w = R * (0.18 + seededRnd(slime.seed, i + 5) * 0.14);
+        const dist = w + seededRnd(slime.seed, i + 8) * Math.max(0, R * 0.88 - w - w * 0.5);
         ctx.beginPath();
         ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist * 0.8, w, R * 0.09, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -2780,9 +3012,10 @@ function drawPlanetSurface(ctx, slime, config, R, now, p) {
     case 'rocky': {
       ctx.fillStyle = 'rgba(92, 31, 21, 0.5)';
       for (let i = 0; i < 4; i++) {
-        const a = seededRnd(slime.seed, i * 5) * Math.PI * 2;
-        const dist = R * (0.2 + seededRnd(slime.seed, i * 2 + 1 + 40) * 0.5);
-        const rr = R * (0.07 + seededRnd(slime.seed, i + 9) * 0.1);
+        const a = (i / 4) * Math.PI * 2 + (seededRnd(slime.seed, i * 3 + 5) * 2 - 1) * 0.45;
+        const rr = R * (0.06 + seededRnd(slime.seed, i + 9) * 0.08);
+        const distMax = R * 0.9 - rr;
+        const dist = rr + seededRnd(slime.seed, i * 2 + 7) * Math.max(0, distMax - rr);
         ctx.beginPath();
         ctx.arc(Math.cos(a) * dist, Math.sin(a) * dist * 0.85, rr, 0, Math.PI * 2);
         ctx.fill();

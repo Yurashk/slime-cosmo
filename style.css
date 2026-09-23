@@ -1381,6 +1381,35 @@ body::before {
   }
 }
 
+.boosters-stickers {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.boosters-stickers .booster-btn {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.boosters-stickers .booster-count {
+  right: auto;
+  left: -5px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  line-height: 16px;
+  font-size: 9px;
+  color: #ffffff;
+  background: radial-gradient(circle at 35% 28%, #dfc3ff 0%, #9b5cff 55%, #7030d6 100%);
+  border: 1px solid rgba(226, 190, 255, 0.65);
+  box-shadow: 0 0 9px rgba(160, 90, 255, 0.75);
+}
+
 .ad-content {
   max-width: 320px;
 }

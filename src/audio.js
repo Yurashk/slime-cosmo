@@ -11,6 +11,8 @@ class SlimeSfx {
     this.unlocked = false;
     this.muted = false;
     this.last = { key: '', t: 0, f: 1 };
+    this.mergeSample = null;
+    this._samplesLoading = null;
   }
 
   init() {
@@ -45,6 +47,56 @@ class SlimeSfx {
     this.unlocked = true;
     const c = this._ensure();
     if (c && c.state === 'suspended') c.resume().catch(() => {});
+    this._loadSamples();
+  }
+
+  _baseUrl() {
+    try {
+      if (import.meta && import.meta.env && import.meta.env.BASE_URL) return import.meta.env.BASE_URL;
+    } catch (e) {}
+    return './';
+  }
+
+  _loadSamples() {
+    if (this._samplesLoading || this.mergeSample) return this._samplesLoading;
+    const c = this._ensure();
+    if (!c) return null;
+    const base = this._baseUrl();
+    this._samplesLoading = this._fetchSample(`${base}sfx/water-bubble-1317.mp3`)
+      .then((buf) => {
+        if (buf) this.mergeSample = buf;
+        return this.mergeSample;
+      })
+      .catch(() => null);
+    return this._samplesLoading;
+  }
+
+  async _fetchSample(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.arrayBuffer();
+      return await this.ctx.decodeAudioData(data);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  _playSample(buf, opts = {}) {
+    if (!this.ctx || !buf) return;
+    const c = this.ctx;
+    const t = c.currentTime;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = Math.max(0.25, Math.min(4, opts.rate || 1));
+    const g = c.createGain();
+    g.gain.value = opts.gain == null ? 1 : opts.gain;
+    src.connect(g);
+    g.connect(this.master);
+    const offset = Math.max(0, opts.offset || 0);
+    const duration = opts.duration != null ? opts.duration : undefined;
+    src.start(t, offset, duration);
+    src.onended = () => { try { src.disconnect(); g.disconnect(); } catch (e) {} };
   }
 
   _ensure() {
@@ -175,16 +227,22 @@ class SlimeSfx {
   }
 
   playDrop() {
-    if (!this._ready()) return;
-    const c = this.ctx;
-    const t = c.currentTime;
-    this._sweep('sine', 340, 180, t, 0.05, 0.06);
+    this._haptic(5);
   }
 
   playMerge(level) {
     if (!this._ready()) return;
     const c = this.ctx;
     const t = c.currentTime;
+
+    if (this.mergeSample) {
+      const buf = this.mergeSample;
+      const rate = 1 + (Math.random() - 0.5) * 0.06;
+      this._playSample(buf, { rate, offset: 0.09, duration: 0.32, gain: 0.9 });
+      this._haptic(14);
+      return;
+    }
+
     const lvl = Math.max(1, level | 0);
     const base = clampFreq(150 * Math.pow(1.08, lvl - 1));
     const pit = base * Math.pow(2, (Math.random() - 0.5) * 0.1) * this._vary('merge', 90);
