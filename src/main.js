@@ -14,6 +14,9 @@ import {
 import { createGameOverBg } from './gameOverBg.js';
 import { startLeaderboard, reportScore, leaderboardGameOver, leaderboardRestart } from './leaderboard.js';
 import { sfx } from './audio.js';
+import { progress } from './state.js';
+import { THEMES, loadTheme, entityIdOf, THEME_BASE_FROM } from './themes/registry.js';
+import { createStartScreen } from './startScreen.js';
 
 const {
   Engine, Runner, Bodies, Body, Composite,
@@ -48,6 +51,16 @@ const finalCollectionEl = document.getElementById('final-collection');
 const newRecordEl = document.getElementById('new-record');
 const goCanvas = document.getElementById('go-canvas');
 const goFrame = document.querySelector('#game-over-overlay .overlay-content');
+const startScreenEl = document.getElementById('start-screen');
+const startCanvas = document.getElementById('start-canvas');
+const startTooltipEl = document.getElementById('start-tooltip');
+const startSelectedLabelEl = document.getElementById('start-selected-label');
+const startRecordLabelEl = document.getElementById('start-record-label');
+const startPlayBtn = document.getElementById('start-play-btn');
+
+let currentThemeId = 'space';
+let startScreen = null;
+let startCtx2d = null;
 
 let engine, runner;
 let bowlBody, bowlBottom, bowlLeft, bowlRight;
@@ -56,7 +69,7 @@ const slimeByBody = new Map();
 let nextSlimeConfig = null;
 let currentPreviewConfig = null;
 let score = 0;
-let highScore = parseInt(localStorage.getItem('neon-slime-highscore') || '0', 10);
+let highScore = progress.getHighScore('space');
 let maxLevelReached = 1;
 let isGameOver = false;
 let lastDropTime = 0;
@@ -404,7 +417,7 @@ function drawPanelSlime(g, slot, now) {
   g.save();
   g.translate(slot.x, y);
   g.scale(revealScale, revealScale);
-  g.globalAlpha = revealAlpha;
+  g.globalAlpha = g.globalAlpha * revealAlpha;
   g.shadowColor = cfg.glowColor;
   g.shadowBlur = 7 + (cfg.glowBlur || 14) * 0.25;
 
@@ -523,7 +536,7 @@ function updateUnlockFly() {
   }
 }
 
-function init() {
+function bootstrap() {
   updateCanvasRect();
   window.addEventListener('resize', updateCanvasRect);
   window.addEventListener('load', updateCanvasRect);
@@ -531,6 +544,18 @@ function init() {
     window.visualViewport.addEventListener('resize', updateCanvasRect);
   }
   requestAnimationFrame(updateCanvasRect);
+
+  sfx.init();
+  window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+  window.addEventListener('keydown', () => sfx.unlock(), { once: true });
+
+  setupStartScreen();
+  startScreen.show();
+}
+
+function startGame(themeId) {
+  currentThemeId = THEMES[themeId] ? themeId : 'space';
+  highScore = progress.getHighScore(currentThemeId);
 
   engine = Engine.create();
   engine.world.gravity.y = 0.9;
@@ -549,9 +574,6 @@ function init() {
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
   Events.on(engine, 'afterUpdate', containSlimes);
   gameStartTime = performance.now();
-  sfx.init();
-  window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
-  window.addEventListener('keydown', () => sfx.unlock(), { once: true });
   spawnNextSlime();
   updatePreview();
   updateUI();
@@ -559,6 +581,39 @@ function init() {
   setupBoostersUI();
   startLeaderboard();
   requestAnimationFrame(gameLoop);
+}
+
+function drawStartSlime(slot, now) {
+  drawPanelSlime(startCtx2d, slot, now);
+}
+
+function startRadiusOf(entityId) {
+  const m = /^([a-z]+):(\d+)$/.exec(entityId);
+  const level = m ? Number(m[2]) : 1;
+  return getSlimeConfig(level).radius;
+}
+
+async function handleStartPlay(themeId) {
+  await loadTheme(themeId);
+  startScreenEl.classList.add('hidden');
+  startScreen.hide();
+  startGame(themeId);
+}
+
+function setupStartScreen() {
+  if (!startCanvas) return;
+  startCtx2d = startCanvas.getContext('2d');
+  startScreen = createStartScreen({
+    canvasEl: startCanvas,
+    tooltipEl: startTooltipEl,
+    selectedLabelEl: startSelectedLabelEl,
+    recordLabelEl: startRecordLabelEl,
+    playBtn: startPlayBtn,
+    draw: drawStartSlime,
+    radiusOf: startRadiusOf,
+    onPlay: handleStartPlay
+  });
+  if (typeof window !== 'undefined') window.__startScreenTest = startScreen;
 }
 
 function updateCanvasRect() {
@@ -1310,6 +1365,9 @@ function performMerge(a, b) {
   const newLevel = level + 1;
   const isNewUnlock = newLevel > maxLevelReached;
   maxLevelReached = Math.max(maxLevelReached, newLevel);
+  if (newLevel >= THEME_BASE_FROM) {
+    progress.markSlimeUnlocked(entityIdOf(currentThemeId, newLevel));
+  }
   updateUI();
   reportScore(score);
   if (isNewUnlock && isSpecialLevel(newLevel)) triggerUnlock(newLevel);
@@ -1724,7 +1782,7 @@ function triggerGameOver() {
   isNewRecord = score > highScore;
   if (isNewRecord) {
     highScore = score;
-    localStorage.setItem('neon-slime-highscore', highScore.toString());
+    progress.setHighScore(currentThemeId, score);
   }
   const elapsed = Math.max(0, Math.round((gameEndTime - gameStartTime) / 1000));
   const mins = Math.floor(elapsed / 60);
@@ -2600,7 +2658,7 @@ function drawSlimes(ctx, now) {
       glowColor = hslToHex(hue, 100, 65);
       strokeColor = hslToHex(hue, 100, 75);
     }
-    const glowBlur = Math.min(32, (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale)) * 0.75;
+    const glowBlur = Math.min(32, (config.glowBlur !== undefined ? config.glowBlur : Math.min(45, 15 + config.level * 2.5)) * (0.8 + 0.5 * layoutScale)) * 0.6;
 
     const opacity = slime.opacity !== undefined ? slime.opacity : 1;
 
@@ -3480,4 +3538,4 @@ function darkenColor(hex, percent) {
   return '#' + (0x1000000 + (R << 16) + (G << 8) + B).toString(16).slice(1);
 }
 
-init();
+bootstrap();
