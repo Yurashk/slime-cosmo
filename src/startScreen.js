@@ -1,7 +1,7 @@
 import { THEMES, THEME_ORDER, themeSlimeLevels, entityIdOf } from './themes/registry.js';
 import { progress } from './state.js';
 
-const FONT = '"Courier New", monospace';
+const FONT = "'Orbitron', 'Montserrat', sans-serif";
 const EMOJI = { space: '🪐', animals: '🦁', ocean: '🐙' };
 const NEON = {
   cyan: '#00f3ff',
@@ -18,18 +18,31 @@ function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-function text(g, str, x, y, size, color, glow, alpha) {
+function text(g, str, x, y, size, color, glow, alpha, spacing) {
   g.save();
   g.globalAlpha = alpha;
-  g.font = `800 ${size}px ${FONT}`;
+  g.font = `700 ${size}px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   if (glow) {
     g.shadowColor = glow;
-    g.shadowBlur = 10;
+    g.shadowBlur = 12;
   }
   g.fillStyle = color;
-  g.fillText(str, x, y);
+  if (spacing && spacing > 0 && str.length > 1) {
+    const chars = Array.from(str);
+    let total = 0;
+    const widths = chars.map(c => g.measureText(c).width);
+    chars.forEach((_, i) => { total += widths[i]; });
+    total += spacing * (chars.length - 1);
+    let cx = x - total / 2 + widths[0] / 2;
+    for (let i = 0; i < chars.length; i++) {
+      g.fillText(chars[i], cx, y);
+      if (i < chars.length - 1) cx += widths[i] / 2 + spacing + widths[i + 1] / 2;
+    }
+  } else {
+    g.fillText(str, x, y);
+  }
   g.restore();
 }
 
@@ -93,7 +106,7 @@ export function createStartScreen(opts) {
     const capH = clamp(8, H * 0.011, 12);
     const podTop = H * 0.245;
     const capY0 = podTop - capH - 3;
-    const headerH = clamp(30, H * 0.045, 42);
+    const headerH = clamp(24, H * 0.032, 30);
     const slimeY0 = podTop + headerH;
     const podBottom = H * 0.82;
     const slotsY1 = podBottom - 8;
@@ -105,6 +118,7 @@ export function createStartScreen(opts) {
     const slots = levels.map((lv, i) => ({
       level: lv,
       entityId: entityIdOf(id, lv),
+      themeId: id,
       r,
       x: Math.round(cx + (i % 2 === 0 ? -1 : 1) * sway),
       y: Math.round(slimeY0 + i * step),
@@ -181,20 +195,26 @@ export function createStartScreen(opts) {
     return THEME_ORDER[activeIndex];
   }
 
-  function drawNebula(g, now) {
-    const W = rect.width;
-    const H = rect.height;
-    const n1 = g.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.5);
-    n1.addColorStop(0, 'rgba(0, 243, 255, 0.07)');
-    n1.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    g.fillStyle = n1;
-    g.fillRect(0, 0, W, H);
-    const n2 = g.createRadialGradient(W * 0.88, H * 0.78, 0, W * 0.88, H * 0.78, W * 0.55);
-    n2.addColorStop(0, 'rgba(255, 0, 85, 0.06)');
-    n2.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    g.fillStyle = n2;
-    g.fillRect(0, 0, W, H);
-  }
+function drawNebula(g, now) {
+  const W = rect.width;
+  const H = rect.height;
+  const breath = 0.5 + 0.5 * Math.sin(now * 0.0004);
+  const n1 = g.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.5);
+  n1.addColorStop(0, `rgba(0, 243, 255, ${0.05 + 0.03 * breath})`);
+  n1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = n1;
+  g.fillRect(0, 0, W, H);
+  const n2 = g.createRadialGradient(W * 0.88, H * 0.78, 0, W * 0.88, H * 0.78, W * 0.55);
+  n2.addColorStop(0, `rgba(255, 0, 85, ${0.04 + 0.02 * breath})`);
+  n2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = n2;
+  g.fillRect(0, 0, W, H);
+  const n3 = g.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, W * 0.42);
+  n3.addColorStop(0, `rgba(79, 172, 254, ${0.025 + 0.02 * breath})`);
+  n3.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = n3;
+  g.fillRect(0, 0, W, H);
+}
 
   function drawStars(g, now) {
     const W = rect.width;
@@ -228,27 +248,31 @@ export function createStartScreen(opts) {
       const cpX = v.sx + (v.pod.cx - v.sx) * 0.5 + (i - 1) * 6;
       const cpY = (v.sy + v.pod.capY0) / 2 + 6;
       g.save();
-      g.globalAlpha = isActive ? 0.95 : 0.22;
-      g.strokeStyle = isActive ? NEON.cyan : 'rgba(255, 255, 255, 0.15)';
-      g.lineWidth = isActive ? 3 : 2;
-      g.shadowColor = isActive ? NEON.cyan : 'rgba(0,0,0,0)';
-      g.shadowBlur = isActive ? 12 : 0;
-      if (isActive) {
-        g.setLineDash([6, 9]);
-        g.lineDashOffset = -now * 0.04;
-      }
+      g.globalAlpha = isActive ? 0.85 : 0.2;
+      g.strokeStyle = isActive ? 'rgba(0, 242, 254, 0.7)' : 'rgba(255, 255, 255, 0.14)';
+      g.lineWidth = isActive ? 2 : 1.5;
+      g.shadowColor = isActive ? 'rgba(0, 242, 254, 0.8)' : 'rgba(0,0,0,0)';
+      g.shadowBlur = isActive ? 8 : 0;
       g.beginPath();
       g.moveTo(v.sx, v.sy);
       g.quadraticCurveTo(cpX, cpY, v.pod.cx, endY);
       g.stroke();
-      g.setLineDash([]);
       if (isActive) {
+        const t = (now * 0.0008) % 1;
+        const mt = 1 - t;
+        const px = mt * mt * v.sx + 2 * mt * t * cpX + t * t * v.pod.cx;
+        const py = mt * mt * v.sy + 2 * mt * t * cpY + t * t * endY;
+        g.shadowBlur = 10;
         g.fillStyle = '#d9fbff';
-        g.shadowBlur = 8;
         g.beginPath();
-        g.arc(v.pod.cx, endY, 3, 0, Math.PI * 2);
+        g.arc(px, py, 2.6, 0, Math.PI * 2);
         g.fill();
       }
+      g.shadowBlur = 0;
+      g.fillStyle = '#d9fbff';
+      g.beginPath();
+      g.arc(v.pod.cx, endY, 3, 0, Math.PI * 2);
+      g.fill();
       g.restore();
     });
     // base cubes
@@ -348,16 +372,40 @@ export function createStartScreen(opts) {
     const pw = pod.podW;
     const ph = pb - py;
 
-    // container background
+    // outer drop shadow for volume
+    g.save();
+    roundRectPath(g, px, py, pw, ph, 14);
+    g.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    g.shadowBlur = 26;
+    g.shadowOffsetY = 12;
+    g.fillStyle = isActive ? 'rgba(15, 22, 46, 0.5)' : 'rgba(8, 10, 22, 0.4)';
+    g.fill();
+    g.restore();
+
+    // container background (glass)
     roundRectPath(g, px, py, pw, ph, 14);
     g.save();
     g.clip();
-    g.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    const bgGrad = g.createLinearGradient(px, py, px, pb);
+    if (isActive) {
+      bgGrad.addColorStop(0, 'rgba(24, 40, 74, 0.62)');
+      bgGrad.addColorStop(1, 'rgba(10, 14, 34, 0.72)');
+    } else {
+      bgGrad.addColorStop(0, 'rgba(20, 24, 48, 0.5)');
+      bgGrad.addColorStop(1, 'rgba(7, 9, 20, 0.62)');
+    }
+    g.fillStyle = bgGrad;
     g.fillRect(px, py, pw, ph);
-    // subtle inner energy for active
+    // top glass highlight
+    const sheen = g.createLinearGradient(px, py, px, py + ph * 0.28);
+    sheen.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.16 : 0.09})`);
+    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = sheen;
+    g.fillRect(px, py, pw, ph * 0.28);
+    // inner energy for active
     if (isActive) {
       const ig = g.createRadialGradient(pod.cx, (py + pb) / 2, 0, pod.cx, (py + pb) / 2, hw * 1.4);
-      ig.addColorStop(0, 'rgba(0, 243, 255, 0.09)');
+      ig.addColorStop(0, 'rgba(0, 243, 255, 0.12)');
       ig.addColorStop(1, 'rgba(0, 0, 0, 0)');
       g.fillStyle = ig;
       g.fillRect(px, py, pw, ph);
@@ -395,35 +443,53 @@ export function createStartScreen(opts) {
     }
     g.restore();
 
-    // border
+    // border (juicy)
     roundRectPath(g, px, py, pw, ph, 14);
     if (isActive) {
-      g.strokeStyle = NEON.cyan;
-      g.shadowColor = NEON.cyan;
-      g.shadowBlur = 16;
-      g.lineWidth = 1.6;
+      const gg = g.createLinearGradient(px, py, px + pw, pb);
+      gg.addColorStop(0, '#00f2fe');
+      gg.addColorStop(1, '#4facfe');
+      g.strokeStyle = gg;
+      g.shadowColor = 'rgba(0, 242, 254, 0.8)';
+      g.shadowBlur = 14 + Math.sin(now * 0.004) * 4;
+      g.lineWidth = 2;
       g.stroke();
       g.shadowBlur = 34;
-      g.globalAlpha = 0.5;
+      g.globalAlpha = 0.55;
+      g.lineWidth = 3.5;
       g.stroke();
       g.globalAlpha = 1;
-    } else {
-      g.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 1;
       g.shadowBlur = 0;
+      g.stroke();
+    } else if (pod.unlocked) {
+      g.strokeStyle = 'rgba(160, 200, 255, 0.28)';
+      g.shadowColor = 'rgba(0, 180, 255, 0.25)';
+      g.shadowBlur = 6;
       g.lineWidth = 1.4;
+      g.stroke();
+      g.shadowBlur = 0;
+      g.strokeStyle = 'rgba(255,255,255,0.14)';
+      g.lineWidth = 1;
+      g.stroke();
+    } else {
+      g.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      g.shadowBlur = 0;
+      g.lineWidth = 1.2;
       g.stroke();
     }
 
     // glass overlay (panel + reflect) for inactive pods
     if (glass > 0.02) {
       const gg = g.createLinearGradient(px, py, pw * 0.35, pb);
-      gg.addColorStop(0, `rgba(255, 255, 255, ${0.13 * glass})`);
+      gg.addColorStop(0, `rgba(255, 255, 255, ${0.16 * glass})`);
       gg.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
       roundRectPath(g, px, py, pw, ph, 14);
       g.fillStyle = gg;
       g.fill();
       roundRectPath(g, px, py, pw, ph, 14);
-      g.strokeStyle = `rgba(255, 255, 255, ${0.07 * glass})`;
+      g.strokeStyle = `rgba(255, 255, 255, ${0.1 * glass})`;
       g.lineWidth = 1;
       g.stroke();
     }
@@ -442,29 +508,28 @@ export function createStartScreen(opts) {
     g.fillStyle = 'rgba(255, 255, 255, 0.06)';
     g.fill();
 
-    // header: title + icon (+lock / count)
-    const hdrY = pod.podTop + 8;
-    const titleSize = clamp(9, rect.width * 0.02, 16);
-    const titleCol = isActive ? pod.accent : 'rgba(190, 205, 230, 0.6)';
-    text(g, pod.title, pod.cx, hdrY, titleSize, titleCol, isActive ? pod.accentGlow : null, isActive ? 1 : (0.9 - glass * 0.25));
-    const emojiSize = clamp(10, rect.width * 0.026, 17);
+    // header: icon (+lock / count), no title inside the battery
+    const hdrY = pod.podTop + 9;
+    const emojiSize = clamp(12, rect.width * 0.03, 19);
     g.save();
-    g.globalAlpha = isActive ? 0.95 : (0.6 - glass * 0.25);
+    g.globalAlpha = isActive ? 1 : (pod.unlocked ? 0.8 : 0.6);
     g.font = `${emojiSize}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(EMOJI[pod.id] || '', pod.cx, hdrY + emojiSize + 2);
+    g.shadowColor = isActive ? pod.accentGlow : 'rgba(0,0,0,0)';
+    g.shadowBlur = isActive ? 14 : 0;
+    g.fillText(EMOJI[pod.id] || '', pod.cx, pod.podTop + pod.headerH * 0.42);
     g.restore();
     if (!pod.unlocked) {
       g.save();
-      g.globalAlpha = 0.9;
+      g.globalAlpha = 0.95;
       g.font = `${clamp(11, rect.width * 0.024, 16)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText('🔒', pod.cx + hw - 16, hdrY + emojiSize + 2);
+      g.fillText('🔒', pod.cx + hw - 16, pod.podTop + pod.headerH * 0.42);
       g.restore();
     } else {
-      text(g, pod.maxLv + '/9', pod.cx + hw - 22, hdrY + 2, clamp(8, rect.width * 0.018, 12), 'rgba(160, 180, 210, 0.6)', null, 0.7);
+      text(g, pod.maxLv + '/9', pod.cx + hw - 22, pod.podTop + pod.headerH * 0.42, clamp(8, rect.width * 0.018, 12), isActive ? 'rgba(120, 240, 255, 0.95)' : 'rgba(180, 205, 235, 0.75)', isActive ? 'rgba(0, 243, 255, 0.6)' : null, 0.9);
     }
 
     g.restore();
@@ -564,10 +629,10 @@ export function createStartScreen(opts) {
     try {
       await onPlay(pod.id);
     } catch (err) {
-      busy = false;
-      if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('disabled'); }
       showTooltipNear('Не удалось загрузить мир');
     }
+    busy = false;
+    if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('disabled'); }
   }
 
   return {
