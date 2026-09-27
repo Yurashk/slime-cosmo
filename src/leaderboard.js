@@ -6,7 +6,7 @@ const WRITE_DEBOUNCE_MS = 1200;
 
 const state = {
   uid: null,
-  name: 'Вы',
+  name: 'You',
   enabled: false,
   ready: false,
   liveScore: 0,
@@ -31,7 +31,7 @@ function buildDom() {
     <div class="lb-head">
       <span class="lb-title">LIVE LEADERBOARD</span>
       <div class="lb-head-actions">
-        <button class="lb-collapse" aria-label="Свернуть">−</button>
+        <button class="lb-collapse" aria-label="Collapse">−</button>
         <button class="lb-close" aria-label="Close">✕</button>
       </div>
     </div>
@@ -41,7 +41,7 @@ function buildDom() {
       <div class="lb-me hidden">
         <span class="lb-me-inner">
           <span class="lb-me-place"></span>
-          <span class="lb-me-name">Вы</span>
+          <span class="lb-me-name">You</span>
           <span class="lb-me-score"></span>
         </span>
       </div>
@@ -115,7 +115,7 @@ function updateSummary() {
   const collapsed = els.wrap.classList.contains('collapsed');
   if (collapsed) {
     const rank = state.myRank != null ? `#${state.myRank}` : '';
-    els.summary.textContent = rank ? `My rank ${rank}` : 'Топ-5 · листайте ↓';
+    els.summary.textContent = rank ? `My rank ${rank}` : 'Top-5 · scroll ↓';
   }
   els.summary.classList.toggle('hidden', !collapsed);
 }
@@ -142,7 +142,7 @@ async function loadTop() {
     }));
     queueRender();
   } catch (e) {
-    showStatus('офлайн');
+    showStatus('offline');
   }
 }
 
@@ -155,7 +155,7 @@ async function loadMyRank() {
     state.myRank = cnt.data().count + 1;
     queueRender();
   } catch (e) {
-    showStatus('офлайн');
+    showStatus('offline');
   }
 }
 
@@ -169,7 +169,7 @@ async function writeScore() {
       updatedAt: Date.now()
     });
   } catch (e) {
-    showStatus('офлайн');
+    showStatus('offline');
   }
 }
 
@@ -202,14 +202,14 @@ export function startLeaderboard() {
   } catch (e) {}
 
   els.wrap.classList.remove('hidden');
-  els.status.textContent = 'загрузка…';
+  els.status.textContent = 'loading…';
   els.status.classList.remove('hidden');
 
   initFirebaseAnalytics();
 
   (async () => {
     const uid = await getAnonymousUid();
-    if (!uid) { showStatus('нет сети'); return; }
+    if (!uid) { showStatus('no network'); return; }
     state.uid = uid;
     const short = uid.replace(/[^0-9]/g, '').slice(0, 4) || uid.slice(0, 4);
     try {

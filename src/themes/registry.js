@@ -4,7 +4,7 @@ export const THEME_SLIME_COUNT = 9;
 export const THEMES = {
   space: {
     id: 'space',
-    title: 'Космос',
+    title: 'Space',
     accent: '#c781ff',
     accentGlow: 'rgba(151, 90, 255, 0.5)',
     lockShape: 'planet',
@@ -28,7 +28,7 @@ export const THEMES = {
   },
   animals: {
     id: 'animals',
-    title: 'Зверюшки',
+    title: 'Animals',
     accent: '#46ff9a',
     accentGlow: 'rgba(80, 255, 150, 0.45)',
     lockShape: 'animal',
@@ -52,7 +52,7 @@ export const THEMES = {
   },
   ocean: {
     id: 'ocean',
-    title: 'Океан',
+    title: 'Ocean',
     accent: '#45ccff',
     accentGlow: 'rgba(70, 190, 255, 0.45)',
     lockShape: 'fish',

@@ -1,6 +1,6 @@
 export default {
   id: 'ocean',
-  title: 'Океан',
+  title: 'Ocean',
   accent: '#45ccff',
   playable: false
 };

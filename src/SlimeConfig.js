@@ -11,7 +11,7 @@ const LEVEL_THEMES = {
   2: { color: '#14ff62', glow: '#74ff90' }, // Neon Green
   3: { color: '#ffdf1f', glow: '#fff07a' }, // Yellow
   4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
-  5: { color: '#ff3399', glow: '#ff7ec9' } // Hot Pink
+  5: { color: '#ff3399', glow: '#ff7ec9' }  // Hot Pink
 };
 
 export const COLLECTIONS = {
@@ -50,11 +50,12 @@ export const COLLECTIONS = {
     id: 'ocean',
     name: 'Ocean',
     from: 6,
-    to: 8,
+    to: 9, // Расширено до 9 уровня
     levels: {
-      6: 'octopus',
-      7: 'crabby',
-      8: 'squid'
+      6: 'fugu',
+      7: 'lionfish',
+      8: 'octopus',
+      9: 'stingray'
     }
   }
 };
@@ -240,88 +241,109 @@ const ANIMALS = {
   }
 };
 
+// 🌊 ОБНОВЛЕННАЯ КОЛЛЕКЦИЯ РЫБ
 const FISH = {
-  octopus: {
-    name: 'Octo',
-    base: '#FF5C8D',
-    dark: '#B82350',
-    light: '#FFB8D0',
-    rim: '#FF8DAF',
-    glow: '#FF477E',
+  fugu: {
+    name: 'Pufferfish',
+    base: '#F5B041',
+    dark: '#D35400',
+    light: '#FFE066',
+    rim: '#FFD166',
+    glow: '#F39C12',
     aura: 0.65,
+    glowBlur: 46,
+    surface: 'smooth',
+    features: {
+      spikes: 12, // Количество колючек по периметру
+      belly: { x: 0, y: 0.25, width: 0.75, height: 0.5, color: '#FFFFFF' },
+      cheeks: [
+        { x: -0.32, y: 0.08, r: 0.095, color: '#FF7A36' },
+        { x: 0.32, y: 0.08, r: 0.095, color: '#FF7A36' }
+      ],
+      mouth: { type: 'pucker', x: 0, y: 0.12, r: 0.08, color: '#E74C3C' }, // Рот "уточкой"
+      eyeStyle: { width: 0.18, height: 0.24, pupilColor: '#1F1100', highlights: true },
+      eyeOffset: { x: 0.24, y: -0.12 }
+    }
+  },
+  lionfish: {
+    name: 'Lionfish',
+    base: '#ECF0F1',
+    dark: '#C0392B',
+    light: '#FFFFFF',
+    rim: '#FF7675',
+    glow: '#E74C3C',
+    aura: 0.7,
     glowBlur: 50,
     surface: 'smooth',
     features: {
-      cheeks: [
-        { x: -0.32, y: 0.08, r: 0.09, color: '#FF2A6D' },
-        { x: 0.32, y: 0.08, r: 0.09, color: '#FF2A6D' }
-      ],
-      mouth: { type: 'small_o', x: 0, y: 0.12, width: 0.12, height: 0.12, strokeColor: '#7A1031', lineWidth: 3 },
-      tentacles: [
-        { x: 0, y: 0.42, r: 0.075, color: '#D62861' },
-        { x: -0.13, y: 0.4, r: 0.07, color: '#E03168' },
-        { x: 0.13, y: 0.4, r: 0.07, color: '#E03168' },
-        { x: -0.24, y: 0.36, r: 0.06, color: '#A31242' },
-        { x: 0.24, y: 0.36, r: 0.06, color: '#A31242' }
-      ],
-      eyeStyle: { width: 0.17, height: 0.23, pupilColor: '#380515' },
-      eyeOffset: { x: 0.22, y: -0.12 }
-    }
-  },
-  crabby: {
-    name: 'Crabby',
-    base: '#FF5252',
-    dark: '#B31212',
-    light: '#FFB0B0',
-    rim: '#FF7D7D',
-    glow: '#FF3838',
-    aura: 0.6,
-    glowBlur: 48,
-    surface: 'smooth',
-    features: {
-      claws: [
-        { x: -0.34, y: 0.12, rx: 0.09, ry: 0.16, angle: -40, color: '#FF7D7D' },
-        { x: 0.34, y: 0.12, rx: 0.09, ry: 0.16, angle: 40, color: '#FF7D7D' }
-      ],
-      legs: [
-        { x: -0.26, y: 0.38, rx: 0.055, ry: 0.15, angle: -20, color: '#FF7D7D' },
-        { x: 0.26, y: 0.38, rx: 0.055, ry: 0.15, angle: 20, color: '#FF7D7D' },
-        { x: -0.13, y: 0.4, rx: 0.055, ry: 0.15, angle: -10, color: '#FF7D7D' },
-        { x: 0.13, y: 0.4, rx: 0.055, ry: 0.15, angle: 10, color: '#FF7D7D' }
+      fins: { count: 10, color: '#E74C3C', tipColor: '#FFFFFF', radiusMultiplier: 1.6 }, // Веерные игольчатые плавники
+      stripes: [ // Полосатый узор тела
+        { x: -0.3, width: 0.1, color: '#C0392B' },
+        { x: 0, width: 0.1, color: '#C0392B' },
+        { x: 0.3, width: 0.1, color: '#C0392B' }
       ],
       cheeks: [
-        { x: -0.3, y: 0.08, r: 0.08, color: '#FF1F1F' },
-        { x: 0.3, y: 0.08, r: 0.08, color: '#FF1F1F' }
+        { x: -0.3, y: 0.08, r: 0.08, color: '#FF7675' },
+        { x: 0.3, y: 0.08, r: 0.08, color: '#FF7675' }
       ],
-      mouth: { type: 'smile', x: 0, y: 0.14, width: 0.18, height: 0.08, strokeColor: '#6B0000', lineWidth: 3 },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#2B0000' },
-      eyeOffset: { x: 0.22, y: -0.12 }
+      mouth: { type: 'smile', x: 0, y: 0.1, width: 0.18, height: 0.08, strokeColor: '#7B241C', lineWidth: 2.5 },
+      eyeStyle: { width: 0.17, height: 0.22, pupilColor: '#2C3E50', highlights: true },
+      eyeOffset: { x: 0.22, y: -0.1 }
     }
   },
-  squid: {
-    name: 'Squiddy',
-    base: '#A78BFA',
-    dark: '#5B21B6',
-    light: '#E9D5FF',
-    rim: '#C4B5FD',
-    glow: '#8B5CF6',
+  octopus: {
+    name: 'Octo',
+    base: '#AF7AC5',
+    dark: '#7D3C98',
+    light: '#E8DAEF',
+    rim: '#C39BD3',
+    glow: '#8E44AD',
     aura: 0.7,
     glowBlur: 52,
     surface: 'smooth',
     features: {
-      hatFin: [
-        { x: -0.24, y: -0.5, rx: 0.1, ry: 0.2, angle: -35, color: '#A78BFA' },
-        { x: 0.24, y: -0.5, rx: 0.1, ry: 0.2, angle: 35, color: '#A78BFA' }
+      tentacles: [ // Закрученные анимированные щупальца снизу
+        { offset: -0.4, wavePhase: 0 },
+        { offset: -0.2, wavePhase: 1 },
+        { offset: 0, wavePhase: 2 },
+        { offset: 0.2, wavePhase: 3 },
+        { offset: 0.4, wavePhase: 4 }
       ],
-      belly: { x: 0, y: 0.18, width: 0.52, height: 0.36, color: '#F3E8FF' },
-      tentacles: [
-        { x: 0, y: 0.42, width: 0.05, height: 0.28, color: '#A78BFA' },
-        { x: -0.13, y: 0.4, width: 0.04, height: 0.24, color: '#7C5CF0' },
-        { x: 0.13, y: 0.4, width: 0.04, height: 0.24, color: '#7C5CF0' }
+      suckersColor: '#E8DAEF',
+      cheeks: [
+        { x: -0.32, y: 0.06, r: 0.09, color: '#EC407A' },
+        { x: 0.32, y: 0.06, r: 0.09, color: '#EC407A' }
       ],
-      mouth: { type: 'tiny_smile', x: 0, y: 0.12, width: 0.12, height: 0.06, strokeColor: '#4C1D95', lineWidth: 2.5 },
-      eyeStyle: { width: 0.18, height: 0.24, pupilColor: '#1E1B4B' },
-      eyeOffset: { x: 0.24, y: -0.12 }
+      mouth: { type: 'small_o', x: 0, y: 0.12, width: 0.12, height: 0.12, strokeColor: '#4A235A', lineWidth: 3 },
+      eyeStyle: { width: 0.18, height: 0.24, pupilColor: '#2C003E', highlights: true },
+      eyeOffset: { x: 0.22, y: -0.12 }
+    }
+  },
+  stingray: {
+    name: 'Stingray',
+    base: '#5DADE2',
+    dark: '#2980B9',
+    light: '#AED6F1',
+    rim: '#85C1E9',
+    glow: '#3498DB',
+    aura: 0.75,
+    glowBlur: 52,
+    surface: 'smooth',
+    features: {
+      wings: { widthMultiplier: 1.6, heightMultiplier: 0.8, color: '#3498DB' }, // Крылья-плавники
+      tail: { lengthMultiplier: 1.8, color: '#2980B9', strokeWidth: 4 }, // Изящный хвостик
+      spots: [ // Пятнышки на манте
+        { x: -0.35, y: 0.15, r: 0.06, color: 'rgba(255, 255, 255, 0.6)' },
+        { x: 0.35, y: 0.15, r: 0.06, color: 'rgba(255, 255, 255, 0.6)' },
+        { x: 0, y: 0.3, r: 0.05, color: 'rgba(255, 255, 255, 0.6)' }
+      ],
+      cheeks: [
+        { x: -0.28, y: 0.08, r: 0.08, color: '#2980B9' },
+        { x: 0.28, y: 0.08, r: 0.08, color: '#2980B9' }
+      ],
+      mouth: { type: 'smile', x: 0, y: 0.12, width: 0.18, height: 0.08, strokeColor: '#1B4F72', lineWidth: 2.5 },
+      eyeStyle: { width: 0.17, height: 0.22, pupilColor: '#1B4F72', highlights: true },
+      eyeOffset: { x: 0.22, y: -0.12 }
     }
   }
 };
@@ -423,8 +445,6 @@ function makeConfig(level) {
   const chamfer = Math.round(Math.min(24, Math.max(10, radius * 0.32)));
   const legendary = level >= MAX_SLIME_LEVEL;
 
-  // Физика тяжести после 6 уровня: масса растёт экспоненциально,
-  // чтобы маленькие слаймы не могли легко сдвинуть крупные
   const density = Math.min(0.09, 0.015 * Math.pow(1.12, level - 6));
   const restitution = Math.max(0.01, 0.07 - (level - 6) * 0.005);
   const friction = Math.min(0.85, 0.62 + (level - 6) * 0.004);
@@ -490,7 +510,7 @@ function buildFishVisuals(level, key) {
     lightColor: f.light,
     rimColor: f.rim,
     aura: f.aura,
-    visualStyle: 'animal',
+    visualStyle: 'ocean',
     particleType: null,
     innerCore: true,
     legendary: false,
@@ -499,13 +519,14 @@ function buildFishVisuals(level, key) {
     collection: 'ocean',
     planet: null,
     isPlanet: false,
-    isAnimal: true,
+    isAnimal: false,
+    isFish: true,
     surface: f.surface,
     ring: false,
     palette: f,
     features: f.features || null,
     name: f.name,
-    animal: key
+    fish: key
   };
 }
 

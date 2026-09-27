@@ -331,26 +331,98 @@ function drawNebula(g, now) {
     }
   }
 
-  function drawBlackSilhouette(g, col, slot, alpha) {
-    g.save();
-    g.translate(slot.x, slot.y);
-    g.globalAlpha = alpha;
-    g.fillStyle = BLACK;
-    g.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    g.lineWidth = 1.5;
-    shapePath(g, col, slot);
-    g.fill();
-    g.stroke();
-    if (col.lockShape === 'planet' && slot.r > 10) {
-      g.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+function drawBlackSilhouette(g, pod, slot, alpha, now = performance.now()) {
+  const { x, y, r } = slot;
+  
+  g.save();
+  g.globalAlpha = alpha;
+
+  // 1. Базовая тёмная подложка ячейки/слота
+  g.beginPath();
+  g.arc(x, y, r * 0.75, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(4, 7, 18, 0.65)';
+  g.fill();
+  g.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  g.lineWidth = 1;
+  g.stroke();
+
+  // 2. Индивидуальные стильные заглушки по темам
+  switch (pod.id) {
+    case 'planets': // 🪐 КОСМОС / ПЛАНЕТЫ
+    case 'space': {
+      // Вращающаяся микро-орбита
+      const angle = now * 0.001 + slot.level;
       g.beginPath();
-      g.ellipse(0, 0, slot.r * 1.25, slot.r * 0.4, 0.5, 0, Math.PI * 2);
+      g.ellipse(x, y, r * 0.5, r * 0.25, angle, 0, Math.PI * 2);
+      g.strokeStyle = 'rgba(0, 243, 255, 0.2)';
+      g.lineWidth = 1;
       g.stroke();
+
+      // Загадочное ядро-планета в центре
+      g.beginPath();
+      g.arc(x, y, r * 0.22, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(0, 243, 255, 0.35)';
+      g.fill();
+      break;
     }
-    g.restore();
+
+    case 'beasts': // 🐾 ЗВЕРИ / ПРИРОДА
+    case 'animals': {
+      // Светящийся аккуратный отпечаток лапки
+      const padColor = 'rgba(255, 170, 0, 0.35)';
+      // Центральная подушечка
+      g.beginPath();
+      g.arc(x, y + r * 0.08, r * 0.18, 0, Math.PI * 2);
+      g.fillStyle = padColor;
+      g.fill();
+
+      // Пальчики (4 точки по дуге)
+      const toes = [-0.28, -0.09, 0.09, 0.28];
+      toes.forEach(a => {
+        const tx = x + Math.sin(a * 2) * (r * 0.32);
+        const ty = y - Math.cos(a * 2) * (r * 0.28);
+        g.beginPath();
+        g.arc(tx, ty, r * 0.07, 0, Math.PI * 2);
+        g.fill();
+      });
+      break;
+    }
+
+    case 'ocean': // 🌊 ОКЕАН / ВОДНЫЙ МИР
+    case 'water': {
+      // Плавная волна + микро-пузырёк
+      const waveOffset = Math.sin(now * 0.003 + slot.level) * 3;
+      
+      // Внутренний полупрозрачный пузырек
+      g.beginPath();
+      g.arc(x + waveOffset * 0.5, y - r * 0.15 + waveOffset, r * 0.15, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(0, 180, 255, 0.4)';
+      g.fill();
+
+      // Волнистая линия в центре слота
+      g.beginPath();
+      g.arc(x, y + r * 0.1, r * 0.38, 0.2, Math.PI - 0.2);
+      g.strokeStyle = 'rgba(0, 180, 255, 0.3)';
+      g.lineWidth = 1.5;
+      g.stroke();
+      break;
+    }
+
+    default: {
+      // Универсальная стильная иконка замочка / вопросика
+      g.font = `${r * 0.5}px sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      g.fillText('✦', x, y);
+      break;
+    }
   }
 
-  function drawPod(g, pod, now) {
+  g.restore();
+}
+
+function drawPod(g, pod, now) {
     const isActive = pod.id === selectedThemeId();
     const glass = isActive ? animGlass[pod.id] : animGlass[pod.id];
     const pop = animPop[pod.id];
@@ -372,164 +444,187 @@ function drawNebula(g, now) {
     const pw = pod.podW;
     const ph = pb - py;
 
-    // outer drop shadow for volume
+    // 1. Внешняя глубокая тень под колбой (объём в пространстве)
     g.save();
-    roundRectPath(g, px, py, pw, ph, 14);
-    g.shadowColor = 'rgba(0, 0, 0, 0.55)';
-    g.shadowBlur = 26;
-    g.shadowOffsetY = 12;
-    g.fillStyle = isActive ? 'rgba(15, 22, 46, 0.5)' : 'rgba(8, 10, 22, 0.4)';
+    roundRectPath(g, px, py, pw, ph, 16);
+    g.shadowColor = 'rgba(0, 0, 0, 0.75)';
+    g.shadowBlur = 20;
+    g.shadowOffsetY = 10;
+    g.fillStyle = '#050608';
     g.fill();
     g.restore();
 
-    // container background (glass)
-    roundRectPath(g, px, py, pw, ph, 14);
+    // 2. Фон внутри стекла: более темный, прозрачный и сочный (убрали серую муть)
+    roundRectPath(g, px, py, pw, ph, 16);
     g.save();
     g.clip();
+    
     const bgGrad = g.createLinearGradient(px, py, px, pb);
     if (isActive) {
-      bgGrad.addColorStop(0, 'rgba(24, 40, 74, 0.62)');
-      bgGrad.addColorStop(1, 'rgba(10, 14, 34, 0.72)');
+      // Активная колба — глубокий темно-синий с бирюзовым отливом
+      bgGrad.addColorStop(0, 'rgba(8, 20, 42, 0.55)');
+      bgGrad.addColorStop(0.5, 'rgba(4, 10, 24, 0.65)');
+      bgGrad.addColorStop(1, 'rgba(2, 4, 12, 0.8)');
     } else {
-      bgGrad.addColorStop(0, 'rgba(20, 24, 48, 0.5)');
-      bgGrad.addColorStop(1, 'rgba(7, 9, 20, 0.62)');
+      // Неактивная колба — чистый темный ночной индиго (без серой гаммы)
+      bgGrad.addColorStop(0, 'rgba(6, 10, 26, 0.45)');
+      bgGrad.addColorStop(0.6, 'rgba(3, 5, 16, 0.6)');
+      bgGrad.addColorStop(1, 'rgba(1, 2, 8, 0.75)');
     }
     g.fillStyle = bgGrad;
     g.fillRect(px, py, pw, ph);
-    // top glass highlight
-    const sheen = g.createLinearGradient(px, py, px, py + ph * 0.28);
-    sheen.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.16 : 0.09})`);
-    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    g.fillStyle = sheen;
-    g.fillRect(px, py, pw, ph * 0.28);
-    // inner energy for active
+
+    // Легкая глубина по краям стекла
+    const innerShadow = g.createRadialGradient(pod.cx, py + ph / 2, pw * 0.2, pod.cx, py + ph / 2, pw * 0.85);
+    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    innerShadow.addColorStop(1, 'rgba(1, 3, 10, 0.5)');
+    g.fillStyle = innerShadow;
+    g.fillRect(px, py, pw, ph);
+
+    // Мягкое внутреннее неон-ядро для активной карточки
     if (isActive) {
-      const ig = g.createRadialGradient(pod.cx, (py + pb) / 2, 0, pod.cx, (py + pb) / 2, hw * 1.4);
-      ig.addColorStop(0, 'rgba(0, 243, 255, 0.12)');
+      const ig = g.createRadialGradient(pod.cx, py + ph * 0.4, 0, pod.cx, py + ph * 0.4, hw * 1.2);
+      ig.addColorStop(0, 'rgba(0, 243, 255, 0.08)');
       ig.addColorStop(1, 'rgba(0, 0, 0, 0)');
       g.fillStyle = ig;
       g.fillRect(px, py, pw, ph);
-    } else if (glass > 0.01) {
-      g.fillStyle = `rgba(5, 8, 18, ${0.2 * glass})`;
-      g.fillRect(px, py, pw, ph);
     }
 
-    // slimes
-    pod.slots.forEach(slot => {
+    // 3. Отрисовка слаймов с УМЕНЬШЕННЫМ (более аккуратным) свечением
+   pod.slots.forEach(slot => {
       const open = pod.unlocked && slot.level <= pod.maxLv;
-      const dim = isActive ? 1 : 0.55;
       if (open && isActive) {
         const bob = Math.sin(now * 0.0022 + slot.level * 1.3) * slot.r * 0.12;
         g.save();
         g.shadowColor = pod.accentGlow;
-        g.shadowBlur = 8;
+        g.shadowBlur = 4;
         draw({ ...slot, unlocked: true, y: slot.y + bob }, now);
         g.restore();
       } else if (open && !isActive) {
         const bob = Math.sin(now * 0.0022 + slot.level * 1.3) * slot.r * 0.1;
         g.save();
-        g.globalAlpha = dim;
+        g.globalAlpha = 0.75; // Чуть приподняли прозрачность (было 0.6), чтобы они выглядели сочнее
+        g.shadowColor = pod.accentGlow;
+        g.shadowBlur = 3; 
         draw({ ...slot, unlocked: true, y: slot.y + bob }, now);
         g.restore();
       } else {
-        drawBlackSilhouette(g, pod, slot, isActive ? 0.85 : 0.5);
+        drawBlackSilhouette(g, pod, slot, isActive ? 0.85 : 0.45, now);
       }
     });
 
-    // locked heavy dim + vignette
+    // 4. ГЛЯНЦЕВЫЕ БЛИКИ И ОТРАЖЕНИЯ (Glass Reflection)
+    // Диагональный резкий блик как на чистом стекле
+    g.beginPath();
+    g.moveTo(px, py);
+    g.lineTo(px + pw * 0.7, py);
+    g.lineTo(px, py + ph * 0.5);
+    g.closePath();
+    const specGrad = g.createLinearGradient(px, py, px + pw * 0.5, py + ph * 0.4);
+    specGrad.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.18 : 0.09})`);
+    specGrad.addColorStop(0.3, `rgba(255, 255, 255, ${isActive ? 0.05 : 0.02})`);
+    specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = specGrad;
+    g.fill();
+
+    // Верхняя светимая кромка стекла (Curvature highlight)
+    const topEdge = g.createLinearGradient(px, py, px, py + 12);
+    topEdge.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+    topEdge.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = topEdge;
+    g.fillRect(px, py, pw, 12);
+
+    // Затемнение неактивных стекол
+    if (glass > 0.01 && !isActive) {
+      g.fillStyle = `rgba(3, 5, 12, ${0.25 * glass})`;
+      g.fillRect(px, py, pw, ph);
+    }
+
+    // Заблокированные карточки
     if (!pod.unlocked) {
-      g.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      g.fillStyle = 'rgba(0, 0, 0, 0.35)';
       g.fillRect(px, py, pw, ph);
     }
     g.restore();
 
-    // border (juicy)
-    roundRectPath(g, px, py, pw, ph, 14);
+    // 5. РАМКА И ОБЛАСТЬ КОЛБЫ (Объемный металлическо-стеклянный кант)
+    roundRectPath(g, px, py, pw, ph, 16);
     if (isActive) {
       const gg = g.createLinearGradient(px, py, px + pw, pb);
       gg.addColorStop(0, '#00f2fe');
       gg.addColorStop(1, '#4facfe');
       g.strokeStyle = gg;
-      g.shadowColor = 'rgba(0, 242, 254, 0.8)';
-      g.shadowBlur = 14 + Math.sin(now * 0.004) * 4;
+      g.shadowColor = 'rgba(0, 242, 254, 0.6)';
+      g.shadowBlur = 10;
       g.lineWidth = 2;
       g.stroke();
-      g.shadowBlur = 34;
-      g.globalAlpha = 0.55;
-      g.lineWidth = 3.5;
-      g.stroke();
-      g.globalAlpha = 1;
-      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      
+      // Внутренний тонкий светлый блик на кантике
+      roundRectPath(g, px + 1, py + 1, pw - 2, ph - 2, 15);
+      g.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       g.lineWidth = 1;
       g.shadowBlur = 0;
       g.stroke();
     } else if (pod.unlocked) {
-      g.strokeStyle = 'rgba(160, 200, 255, 0.28)';
-      g.shadowColor = 'rgba(0, 180, 255, 0.25)';
-      g.shadowBlur = 6;
-      g.lineWidth = 1.4;
-      g.stroke();
-      g.shadowBlur = 0;
-      g.strokeStyle = 'rgba(255,255,255,0.14)';
-      g.lineWidth = 1;
-      g.stroke();
-    } else {
-      g.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-      g.shadowBlur = 0;
+      g.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      g.shadowColor = 'rgba(0, 180, 255, 0.15)';
+      g.shadowBlur = 4;
       g.lineWidth = 1.2;
       g.stroke();
-    }
-
-    // glass overlay (panel + reflect) for inactive pods
-    if (glass > 0.02) {
-      const gg = g.createLinearGradient(px, py, pw * 0.35, pb);
-      gg.addColorStop(0, `rgba(255, 255, 255, ${0.16 * glass})`);
-      gg.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
-      roundRectPath(g, px, py, pw, ph, 14);
-      g.fillStyle = gg;
-      g.fill();
-      roundRectPath(g, px, py, pw, ph, 14);
-      g.strokeStyle = `rgba(255, 255, 255, ${0.1 * glass})`;
+      g.shadowBlur = 0;
+    } else {
+      g.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      g.shadowBlur = 0;
       g.lineWidth = 1;
       g.stroke();
     }
 
-    // battery top cap (contact)
-    const capW = pw * 0.4;
+    // 6. ВЕРХНЯЯ КРАШЕЧКА / КАТOД (Battery Cap)
+    const capW = pw * 0.38;
     const capPy = pod.capY0;
     const capHgt = pod.capH;
-    roundRectPath(g, pod.cx - capW / 2, capPy, capW, capHgt, 3);
-    g.fillStyle = '#2a2e3d';
+    roundRectPath(g, pod.cx - capW / 2, capPy, capW, capHgt, 4);
+    
+    const capGrad = g.createLinearGradient(pod.cx - capW / 2, capPy, pod.cx + capW / 2, capPy);
+    capGrad.addColorStop(0, '#1a1d26');
+    capGrad.addColorStop(0.5, '#3a3f52');
+    capGrad.addColorStop(1, '#1a1d26');
+    g.fillStyle = capGrad;
     g.fill();
-    g.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    g.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     g.lineWidth = 1;
     g.stroke();
-    roundRectPath(g, pod.cx - capW / 2, capPy, capW, capHgt / 2, 3);
-    g.fillStyle = 'rgba(255, 255, 255, 0.06)';
-    g.fill();
 
-    // header: icon (+lock / count), no title inside the battery
-    const hdrY = pod.podTop + 9;
-    const emojiSize = clamp(12, rect.width * 0.03, 19);
+    // HEADER (Иконка + Счётчик)
     g.save();
-    g.globalAlpha = isActive ? 1 : (pod.unlocked ? 0.8 : 0.6);
-    g.font = `${emojiSize}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    g.globalAlpha = isActive ? 1 : (pod.unlocked ? 0.75 : 0.5);
+    g.font = `${clamp(12, rect.width * 0.03, 19)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.shadowColor = isActive ? pod.accentGlow : 'rgba(0,0,0,0)';
-    g.shadowBlur = isActive ? 14 : 0;
+    g.shadowBlur = isActive ? 8 : 0;
     g.fillText(EMOJI[pod.id] || '', pod.cx, pod.podTop + pod.headerH * 0.42);
     g.restore();
+
     if (!pod.unlocked) {
       g.save();
-      g.globalAlpha = 0.95;
+      g.globalAlpha = 0.9;
       g.font = `${clamp(11, rect.width * 0.024, 16)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText('🔒', pod.cx + hw - 16, pod.podTop + pod.headerH * 0.42);
       g.restore();
     } else {
-      text(g, pod.maxLv + '/9', pod.cx + hw - 22, pod.podTop + pod.headerH * 0.42, clamp(8, rect.width * 0.018, 12), isActive ? 'rgba(120, 240, 255, 0.95)' : 'rgba(180, 205, 235, 0.75)', isActive ? 'rgba(0, 243, 255, 0.6)' : null, 0.9);
+      text(
+        g,
+        pod.maxLv + '/9',
+        pod.cx + hw - 22,
+        pod.podTop + pod.headerH * 0.42,
+        clamp(8, rect.width * 0.018, 12),
+        isActive ? 'rgba(120, 240, 255, 0.95)' : 'rgba(180, 205, 235, 0.65)',
+        isActive ? 'rgba(0, 243, 255, 0.4)' : null,
+        0.9
+      );
     }
 
     g.restore();
@@ -565,7 +660,7 @@ function drawNebula(g, now) {
   function updateLabels() {
     const t = THEMES[selectedThemeId()];
     if (selectedLabelEl) selectedLabelEl.textContent = t ? t.title : '';
-    if (recordLabelEl) recordLabelEl.textContent = 'Рекорд: ' + progress.getHighScore(selectedThemeId()).toLocaleString();
+    if (recordLabelEl) recordLabelEl.textContent = 'Record: ' + progress.getHighScore(selectedThemeId()).toLocaleString();
   }
 
   function showTooltipNear(textStr) {
@@ -617,11 +712,11 @@ function drawNebula(g, now) {
     if (!pod || !rect) return;
     if (!pod.unlocked) {
       const req = THEMES[pod.id].unlockRequirement;
-      showTooltipNear(req ? `Достигни ${req.requiredLevel} уровня в ${THEMES[req.themeId].title}` : 'Мир ещё закрыт');
+      showTooltipNear(req ? `Reach level ${req.requiredLevel} in ${THEMES[req.themeId].title}` : 'World is locked');
       return;
     }
     if (!pod.playable) {
-      showTooltipNear('Этот мир скоро появится');
+      showTooltipNear('This world is coming soon');
       return;
     }
     busy = true;
@@ -629,7 +724,7 @@ function drawNebula(g, now) {
     try {
       await onPlay(pod.id);
     } catch (err) {
-      showTooltipNear('Не удалось загрузить мир');
+      showTooltipNear('Failed to load world');
     }
     busy = false;
     if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('disabled'); }

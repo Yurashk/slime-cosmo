@@ -1,6 +1,6 @@
 export default {
   id: 'space',
-  title: 'РљРѕСЃРјРѕСЃ',
+  title: 'Space',
   accent: '#c781ff',
   playable: true
 };

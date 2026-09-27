@@ -116,7 +116,7 @@ const COLLECTION_ARC = 0.24;
 const BOOSTER_DEFS = {
   blackhole: { unlockLevel: 8 }
 };
-const BOOSTER_NAMES = { blackhole: 'Р§РµСЂРЅР°СЏ РґС‹СЂР°' };
+const BOOSTER_NAMES = { blackhole: 'Black Hole' };
 const BH_DURATION = 620;
 const BH_TOUCH_LIFT = 72;
 
@@ -192,7 +192,7 @@ function randItem(arr) {
 
 function isSpecialLevel(level) {
   const cfg = getSlimeConfig(level);
-  return !!(cfg.isPlanet || cfg.isAnimal || cfg.legendary || cfg.iridescent || cfg.golden);
+  return !!(cfg.isPlanet || cfg.isAnimal || cfg.isFish || cfg.legendary || cfg.iridescent || cfg.golden);
 }
 
 function updateCollectionRect() {
@@ -360,7 +360,7 @@ function getPanelSlime(level) {
 
 function drawLockedSlot(g, level, x, y, r, themeId) {
   const cfg = getSlimeConfig(level, themeId);
-  const pal = (cfg.isPlanet || cfg.isAnimal) && cfg.palette ? cfg.palette : null;
+  const pal = (cfg.isPlanet || cfg.isAnimal || cfg.isFish) && cfg.palette ? cfg.palette : null;
   const squircle = !!(cfg.isAnimal);
   g.save();
   g.translate(Math.round(x) + 0.5, Math.round(y) + 0.5);
@@ -410,7 +410,7 @@ function drawLockedSlot(g, level, x, y, r, themeId) {
   g.restore();
 }
 
-function drawPanelSlime(g, slot, now) {
+function drawPanelSlime(g, slot, now, glowScale = 1) {
   const cfg = getSlimeConfig(slot.level, slot.themeId);
   const r = slot.r;
   const y = slot.y;
@@ -434,7 +434,7 @@ function drawPanelSlime(g, slot, now) {
   g.scale(revealScale, revealScale);
   g.globalAlpha = g.globalAlpha * revealAlpha;
   g.shadowColor = cfg.glowColor;
-  g.shadowBlur = 7 + (cfg.glowBlur || 14) * 0.25;
+  g.shadowBlur = (7 + (cfg.glowBlur || 14) * 0.25) * glowScale;
 
   if (cfg.isAnimal && cfg.palette) {
     const animal = getPanelSlime(slot.level);
@@ -443,7 +443,9 @@ function drawPanelSlime(g, slot, now) {
   } else if (cfg.isPlanet && cfg.palette) {
     const planet = getPanelSlime(slot.level);
     planet.body.angle = slot.level % 2 ? 0.16 : -0.16;
-    drawPlanetBody(g, planet, cfg, r, 0, 1, revealAlpha, cfg.glowColor, 8 + r * 0.45);
+    drawPlanetBody(g, planet, cfg, r, 0, 1, revealAlpha, cfg.glowColor, (8 + r * 0.45) * glowScale);
+  } else if (cfg.isFish && cfg.palette) {
+    drawPanelOceanFish(g, cfg, r, now);
   } else {
     const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
     const grad = g.createLinearGradient(0, -r, 0, r);
@@ -470,7 +472,7 @@ function drawPanelSlime(g, slot, now) {
     g.stroke();
   }
 
-  if (cfg.isAnimal && cfg.features && cfg.features.eyeStyle) {
+  if ((cfg.isAnimal || cfg.isFish) && cfg.features && cfg.features.eyeStyle) {
     drawPanelAnimalEyes(g, r, cfg);
   } else {
     drawPanelEyes(g, r, 0, -1);
@@ -482,14 +484,24 @@ function drawPanelAnimalEyes(g, r, cfg) {
   const f = cfg.features;
   const es = f.eyeStyle;
   const eyeOff = f.eyeOffset || { x: 0.22, y: -0.12 };
+  const stalks = f.eyestalks && f.eyestalks.length >= 2 ? f.eyestalks : null;
   const eyeW = r * 2 * es.width;
   const eyeH = r * 2 * es.height;
   const pupilColor = es.pupilColor || '#21242e';
   g.save();
   g.shadowBlur = 0;
   for (const s of [-1, 1]) {
-    const ex = s * eyeOff.x * r * 2;
-    const ey = eyeOff.y * r * 2;
+    let ex, ey;
+    if (stalks) {
+      const st = stalks[s < 0 ? 0 : 1];
+      const ang = (st.angle || 0) * Math.PI / 180;
+      const ry = st.ry || st.rx || 0.12;
+      ex = (st.x + Math.sin(ang) * ry * 0.55) * r * 2;
+      ey = (st.y - Math.cos(ang) * ry * 0.55) * r * 2;
+    } else {
+      ex = s * eyeOff.x * r * 2;
+      ey = eyeOff.y * r * 2;
+    }
     g.save();
     g.translate(ex, ey);
     g.beginPath();
@@ -644,7 +656,7 @@ function startGame(themeId) {
 }
 
 function drawStartSlime(slot, now) {
-  drawPanelSlime(startCtx2d, slot, now);
+  drawPanelSlime(startCtx2d, slot, now, 0.6);
 }
 
 function startRadiusOf(entityId) {
@@ -1057,9 +1069,9 @@ function stylePreviewElement(el, config, size, glow) {
     el.style.width = size + 'px';
     el.style.height = size + 'px';
   }
-  if ((config.isPlanet || config.isAnimal) && config.palette) {
+  if ((config.isPlanet || config.isAnimal || config.isFish) && config.palette) {
     const p = config.palette;
-    el.style.borderRadius = config.isAnimal ? '24%' : '50%';
+    el.style.borderRadius = '50%';
     el.style.background = `radial-gradient(circle at 30% 30%, ${p.light}, ${p.base} 45%, ${p.dark})`;
     el.style.boxShadow = `${glow ? '0 0 14px ' + p.glow + ', 0 0 28px ' + p.glow : '0 0 8px ' + p.glow}`;
   } else {
@@ -1442,7 +1454,7 @@ function performMerge(a, b) {
 
   applyBlastWave(anchorX, midY, level + 1);
 
-  if (config.isPlanet || config.isAnimal) sfx.playPlanetMerge(newLevel);
+  if (config.isPlanet || config.isAnimal || config.isFish) sfx.playPlanetMerge(newLevel);
   else sfx.playMerge(newLevel);
   if (comboCount >= 2) sfx.playCombo(comboCount);
 }
@@ -1643,10 +1655,10 @@ function updateBoosterUI() {
     if (countEl) countEl.classList.toggle('hidden', !unlocked || count === 0);
     if (badgeEl) badgeEl.classList.toggle('hidden', unlocked && count > 0);
     const hintText = !unlocked
-      ? `РћС‚РєСЂРѕР№ ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel, currentThemeId).name}, С‡С‚РѕР±С‹ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІР°С‚СЊ`
+      ? `Unlock ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel, currentThemeId).name} to enable`
       : count > 0
-        ? `${BOOSTER_NAMES[key]} вЂ” РІ РЅР°Р»РёС‡РёРё ${count}`
-        : `${BOOSTER_NAMES[key]} вЂ” РїРѕСЃРјРѕС‚СЂРµС‚СЊ СЂРµРєР»Р°РјСѓ Рё РїРѕР»СѓС‡РёС‚СЊ +1`;
+        ? `${BOOSTER_NAMES[key]} — ${count} in stock`
+        : `${BOOSTER_NAMES[key]} — watch an ad to get +1`;
     btn.dataset.hint = hintText;
     btn.title = hintText;
   }
@@ -1840,7 +1852,7 @@ function startRewardAd(key) {
   adCloseBtn.classList.add('hidden');
   adRewardEl.classList.add('hidden');
   adProgressBarEl.style.width = '0%';
-  adMessageEl.textContent = 'Р—Р°РіСЂСѓР·РєР° СЂРµРєР»Р°РјС‹вЂ¦';
+  adMessageEl.textContent = 'Loading ad…';
   adOverlay.classList.remove('hidden');
   adJob = { key, t0: performance.now(), dur: 3400, stop: null, granted: false };
   const tick = () => {
@@ -1849,14 +1861,14 @@ function startRewardAd(key) {
     const p = Math.min(elapsed / adJob.dur, 1);
     adProgressBarEl.style.width = `${(p * 100).toFixed(1)}%`;
     if (p < 0.3) {
-      adMessageEl.textContent = 'Р—Р°РіСЂСѓР·РєР° СЂРµРєР»Р°РјС‹вЂ¦';
+      adMessageEl.textContent = 'Loading ad…';
     } else if (p < 1) {
-      adMessageEl.textContent = `Р РµРєР»Р°РјР°вЂ¦ ${Math.ceil((1 - p) * adJob.dur / 1000)} СЃ`;
+      adMessageEl.textContent = `Ad… ${Math.ceil((1 - p) * adJob.dur / 1000)}s`;
     } else if (!adJob.granted) {
       adJob.granted = true;
       grantBooster(adJob.key);
       sfx.playReward();
-      adMessageEl.textContent = 'Р‘СѓСЃС‚РµСЂ РїРѕР»СѓС‡РµРЅ!';
+      adMessageEl.textContent = 'Booster received!';
       adRewardEl.classList.remove('hidden');
       adCloseBtn.classList.remove('hidden');
     }
@@ -1932,7 +1944,7 @@ function triggerGameOver() {
   if (finalSlimeNameEl) finalSlimeNameEl.textContent = topConfig.name;
   if (finalBestEl) finalBestEl.textContent = highScore.toLocaleString();
   if (finalMergesEl) finalMergesEl.textContent = totalMerges.toLocaleString();
-  if (finalComboEl) finalComboEl.textContent = `Г—${bestCombo}`;
+  if (finalComboEl) finalComboEl.textContent = `×${bestCombo}`;
   if (finalTimeEl) finalTimeEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
   if (finalCollectionEl) {
     finalCollectionEl.textContent = `${Math.min(PLANET_TOTAL, Math.max(0, maxLevelReached - 5))} / ${PLANET_TOTAL}`;
@@ -2277,10 +2289,10 @@ function drawTargetModeOverlay(ctx, now) {
   ctx.fillStyle = 'rgba(205, 150, 255, 0.95)';
   ctx.font = '800 12px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Р§Р•Р РќРђРЇ Р”Р«Р Рђ: РЅР°Р¶РјРё РЅР° СЃР»РёР·РЅСЏ', bowlCenterX, labelY);
+  ctx.fillText('BLACK HOLE: tap a slime', bowlCenterX, labelY);
   ctx.fillStyle = 'rgba(180, 130, 255, 0.75)';
   ctx.font = '600 10px sans-serif';
-  ctx.fillText('Esc РёР»Рё РєР»РёРє РјРёРјРѕ С‡Р°С€Рё вЂ” РѕС‚РјРµРЅР°', bowlCenterX, labelY + 13);
+  ctx.fillText('Esc or click away — cancel', bowlCenterX, labelY + 13);
   ctx.restore();
 }
 
@@ -2348,7 +2360,7 @@ function drawComboOverlay(ctx, now) {
   ctx.font = `600 ${13 * layoutScale}px 'Segoe UI', 'Arial', sans-serif`;
   ctx.shadowBlur = 0;
   ctx.fillStyle = color;
-  ctx.fillText(`+${mult}Г— blok points`, 0, 20 * layoutScale);
+  ctx.fillText(`+${mult}× points`, 0, 20 * layoutScale);
   ctx.restore();
 }
 
@@ -2973,6 +2985,8 @@ function drawSlimes(ctx, now) {
 
     if (config.isPlanet) {
       drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, glowBlur);
+    } else if (config.isFish) {
+      drawOceanFishBody(ctx, slime, config, r, now, opacity, glowColor, glowBlur);
     } else if (config.isAnimal) {
       drawAnimalBody(ctx, slime, config, sizeX, sizeY, chamfer, now, opacity, glowColor, glowBlur);
     } else {
@@ -3158,6 +3172,267 @@ function drawAnimalBody(ctx, slime, config, sizeX, sizeY, chamfer, now, opacity,
 
   drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p);
   drawAura(ctx, config, R, now, opacity, glowColor);
+}
+
+function drawOceanFishFeatures(g, cfg, x, y, r, now = performance.now()) {
+  if (!cfg.features) return;
+  const f = cfg.features;
+
+  // 1. Spikes around the perimeter (pufferfish)
+  if (f.spikes) {
+    g.fillStyle = cfg.darkColor || cfg.color;
+    for (let i = 0; i < f.spikes; i++) {
+      const angle = (i / f.spikes) * Math.PI * 2;
+      const sx = x + Math.cos(angle) * (r * 1.15);
+      const sy = y + Math.sin(angle) * (r * 1.15);
+
+      g.beginPath();
+      g.arc(sx, sy, r * 0.15, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // 2. Fan needle fins (lionfish)
+  if (f.fins) {
+    g.strokeStyle = f.fins.color;
+    g.lineWidth = Math.max(2, r * 0.08);
+    for (let i = 0; i < f.fins.count; i++) {
+      const angle = Math.PI * 0.75 + (i / f.fins.count) * Math.PI * 1.5;
+      const ex = x + Math.cos(angle) * (r * f.fins.radiusMultiplier);
+      const ey = y + Math.sin(angle) * (r * f.fins.radiusMultiplier);
+
+      g.beginPath();
+      g.moveTo(x + Math.cos(angle) * (r * 0.6), y + Math.sin(angle) * (r * 0.6));
+      g.lineTo(ex, ey);
+      g.stroke();
+
+      // Droplet tips
+      g.beginPath();
+      g.arc(ex, ey, r * 0.06, 0, Math.PI * 2);
+      g.fillStyle = f.fins.tipColor;
+      g.fill();
+    }
+  }
+
+  // 3. Tentacles below the body (octopus)
+  if (f.tentacles && Array.isArray(f.tentacles)) {
+    g.lineWidth = r * 0.16;
+    g.lineCap = 'round';
+
+    f.tentacles.forEach((t, i) => {
+      const offsetX = t.offset ? t.offset * r * 1.8 : (i - 2) * (r * 0.35);
+      const wave = Math.sin(now * 0.005 + (t.wavePhase || i)) * (r * 0.15);
+      const startX = x + offsetX;
+      const startY = y + r * 0.4;
+
+      // Tentacle
+      g.strokeStyle = cfg.darkColor || cfg.color;
+      g.beginPath();
+      g.moveTo(startX, startY);
+      g.quadraticCurveTo(startX + wave, startY + r * 0.5, startX + wave * 1.2, startY + r * 0.8);
+      g.stroke();
+
+      // Sucker
+      g.fillStyle = f.suckersColor || '#fff';
+      g.beginPath();
+      g.arc(startX + wave * 0.8, startY + r * 0.55, r * 0.06, 0, Math.PI * 2);
+      g.fill();
+    });
+  }
+
+  // 4. Stingray wings and tail
+  if (f.wings) {
+    // Tail
+    if (f.tail) {
+      const tailWave = Math.sin(now * 0.004) * (r * 0.25);
+      g.strokeStyle = f.tail.color;
+      g.lineWidth = f.tail.strokeWidth || 3;
+      g.beginPath();
+      g.moveTo(x, y + r * 0.5);
+      g.quadraticCurveTo(x + tailWave, y + r * 1.2, x + tailWave * 0.5, y + r * f.tail.lengthMultiplier);
+      g.stroke();
+    }
+
+    // Side wing fins
+    g.fillStyle = f.wings.color;
+    g.beginPath();
+    g.ellipse(x, y, r * f.wings.widthMultiplier, r * f.wings.heightMultiplier, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // 5. Stripes (lionfish)
+  if (f.stripes) {
+    g.fillStyle = f.stripes[0].color || cfg.darkColor;
+    f.stripes.forEach(s => {
+      g.fillRect(x + s.x * r, y - r * 0.7, s.width * r, r * 1.4);
+    });
+  }
+
+  // 6. White belly (pufferfish / stingray)
+  if (f.belly) {
+    g.fillStyle = f.belly.color;
+    g.beginPath();
+    g.ellipse(x + f.belly.x * r, y + f.belly.y * r, (f.belly.width * r) / 2, (f.belly.height * r) / 2, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+
+function drawOceanFishExtras(g, cfg, r, p) {
+  const f = cfg.features;
+  if (!f) return;
+  const F = (v) => v * r * 2;
+
+  // Cheeks
+  if (f.cheeks) {
+    g.save();
+    for (const ck of f.cheeks) {
+      g.beginPath();
+      g.arc(F(ck.x), F(ck.y), Math.max(1, F(ck.r)), 0, Math.PI * 2);
+      g.fillStyle = hexA(ck.color || '#FFD0E0', 0.6);
+      g.fill();
+    }
+    g.restore();
+  }
+
+  // Mouth
+  if (f.mouth) {
+    g.save();
+    const mx = F(f.mouth.x);
+    const my = F(f.mouth.y);
+    const mw = F(f.mouth.width || 0.18);
+    const mh = F(f.mouth.height || 0.08);
+    g.strokeStyle = hexA(f.mouth.strokeColor || p.dark, 0.9);
+    g.lineWidth = Math.max(1.2, F((f.mouth.lineWidth || 2) * 0.02));
+    g.lineCap = 'round';
+    if (f.mouth.type === 'pucker') {
+      g.fillStyle = f.mouth.color || '#E74C3C';
+      g.beginPath();
+      g.arc(mx, my, Math.max(1.5, F(f.mouth.r || 0.08)), 0, Math.PI * 2);
+      g.fill();
+    } else if (f.mouth.type === 'smile' || f.mouth.type === 'tiny_smile' || !f.mouth.type) {
+      const half = mw * 0.5;
+      g.beginPath();
+      g.moveTo(mx - half, my);
+      g.quadraticCurveTo(mx, my + mh, mx + half, my);
+      g.stroke();
+    } else if (f.mouth.type === 'small_o') {
+      g.beginPath();
+      g.ellipse(mx, my, mw * 0.5, mh * 0.5, 0, 0, Math.PI * 2);
+      g.fillStyle = hexA(f.mouth.strokeColor || p.dark, 0.9);
+      g.fill();
+    }
+    g.restore();
+  }
+
+  // Spots (stingray)
+  if (f.spots) {
+    g.save();
+    for (const sp of f.spots) {
+      g.beginPath();
+      g.arc(F(sp.x), F(sp.y), Math.max(1, F(sp.r)), 0, Math.PI * 2);
+      g.fillStyle = sp.color || '#fff';
+      g.fill();
+    }
+    g.restore();
+  }
+}
+
+function drawPanelOceanFish(g, cfg, r, now) {
+  const p = cfg.palette;
+  const grad = g.createRadialGradient(-r * 0.32, -r * 0.36, r * 0.1, 0, 0, r);
+  grad.addColorStop(0, p.light);
+  grad.addColorStop(0.45, p.base);
+  grad.addColorStop(1, p.dark);
+  g.fillStyle = grad;
+  g.beginPath();
+  g.arc(0, 0, r, 0, Math.PI * 2);
+  g.fill();
+
+  if (cfg.innerCore) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.5;
+    const coreGrad = g.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
+    coreGrad.addColorStop(0, hexA(cfg.lightColor || p.light, 0.9));
+    coreGrad.addColorStop(0.45, hexA(cfg.glowColor || p.glow, 0.35));
+    coreGrad.addColorStop(1, hexA(cfg.glowColor || p.glow, 0));
+    g.fillStyle = coreGrad;
+    g.beginPath();
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  }
+
+  drawOceanFishFeatures(g, cfg, 0, 0, r, now);
+  drawOceanFishExtras(g, cfg, r, p);
+
+  g.strokeStyle = hexA(p.rim, 0.85);
+  g.lineWidth = 1.4;
+  g.shadowBlur = 0;
+  g.beginPath();
+  g.arc(0, 0, r - 1.2, 0, Math.PI * 2);
+  g.stroke();
+}
+
+function drawOceanFishBody(ctx, slime, config, r, now, opacity, glowColor, glowBlur) {
+  const p = config.palette;
+  const haloR = r * 1.55 + Math.sin(now * 0.002 + slime.seed) * r * 0.06;
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.3;
+  const halo = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, haloR);
+  halo.addColorStop(0, hexA(p.glow, 0.45));
+  halo.addColorStop(1, hexA(p.glow, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = glowBlur;
+  const bodyGrad = ctx.createRadialGradient(-r * 0.32, -r * 0.36, r * 0.1, 0, 0, r);
+  bodyGrad.addColorStop(0, p.light);
+  bodyGrad.addColorStop(0.45, p.base);
+  bodyGrad.addColorStop(1, p.dark);
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (config.innerCore) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = opacity * (0.35 + 0.15 * Math.sin(now * 0.004 + slime.seed));
+    const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
+    coreGrad.addColorStop(0, hexA(config.lightColor || p.light, 0.9));
+    coreGrad.addColorStop(0.45, hexA(config.glowColor || p.glow, 0.35));
+    coreGrad.addColorStop(1, hexA(config.glowColor || p.glow, 0));
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  drawOceanFishFeatures(ctx, config, 0, 0, r, now);
+  drawOceanFishExtras(ctx, config, r, p);
+
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.8;
+  ctx.strokeStyle = p.rim;
+  ctx.lineWidth = Math.max(1.5, r * 0.055);
+  ctx.lineCap = 'round';
+  ctx.shadowColor = p.rim;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 1, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  drawAura(ctx, config, r, now, opacity, glowColor);
 }
 
 function drawPanelAnimal(g, slime, config, r, opacity) {
@@ -3539,6 +3814,46 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
     ctx.restore();
   }
 
+  // Head tuft: round tufts on top of the head (e.g. octopus)
+  if (f.headTuft) {
+    ctx.save();
+    for (const pl of f.headTuft) {
+      ctx.beginPath();
+      ctx.arc(F(pl.x), F(pl.y), Math.max(1, F(pl.r || pl.rx || 0.08)), 0, Math.PI * 2);
+      ctx.fillStyle = hexA(pl.color || config.darkColor || p.dark, 0.9);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Eyestalks: vertical ovals sticking up above the head (e.g. crab)
+  if (f.eyestalks) {
+    ctx.save();
+    for (const st of f.eyestalks) {
+      ctx.save();
+      ctx.translate(F(st.x), F(st.y));
+      ctx.rotate((st.angle || 0) * Math.PI / 180);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, F(st.rx), F(st.ry || st.rx), 0, 0, Math.PI * 2);
+      ctx.fillStyle = hexA(st.color || p.dark, 0.92);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // Suckers: small dots on tentacles (e.g. octopus)
+  if (f.suckers) {
+    ctx.save();
+    for (const sk of f.suckers) {
+      ctx.beginPath();
+      ctx.arc(F(sk.x), F(sk.y), Math.max(1, F(sk.r)), 0, Math.PI * 2);
+      ctx.fillStyle = hexA(sk.color || p.light, 0.95);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // РђРЅС‚РµРЅРЅС‹-СѓСЃРёРєРё (СЃС‚РІРѕР» + С€Р°СЂРёРє РЅР° РєРѕРЅС†Рµ)
   if (f.antenna) {
     ctx.save();
@@ -3619,7 +3934,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
     ctx.restore();
   }
 
-  // РљР»РµС€РЅРё (РѕРІР°Р»С‹ СЃ СѓРіР»РѕРј)
+  // Claws: angled ovals (e.g. crab)
   if (f.claws) {
     ctx.save();
     for (const cl of f.claws) {
@@ -3630,6 +3945,12 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
       ctx.ellipse(0, 0, F(cl.rx), F(cl.ry || cl.rx), 0, 0, Math.PI * 2);
       ctx.fillStyle = hexA(cl.color || p.dark, 0.92);
       ctx.fill();
+      if (cl.innerColor) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, F(cl.rx) * 0.55, F(cl.ry || cl.rx) * 0.55, 0, 0, Math.PI * 2);
+        ctx.fillStyle = cl.innerColor;
+        ctx.fill();
+      }
       ctx.restore();
     }
     ctx.restore();
@@ -3651,7 +3972,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
     ctx.restore();
   }
 
-  // РџР»Р°РІРЅРёРє-РєР°РїСЋС€РѕРЅ (РѕРІР°Р»С‹ СЃРІРµСЂС…Сѓ, РєР°Рє Сѓ РіРµРїР°СЂРґР°/РєР°Р»СЊРјР°СЂР°)
+  // Hat fin: angled ovals on top, like a hood (e.g. squid)
   if (f.hatFin) {
     ctx.save();
     for (const hf of f.hatFin) {
@@ -3662,6 +3983,12 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
       ctx.ellipse(0, 0, F(hf.rx), F(hf.ry || hf.rx), 0, 0, Math.PI * 2);
       ctx.fillStyle = hexA(hf.color || p.light, 0.92);
       ctx.fill();
+      if (hf.innerColor) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, F(hf.rx) * 0.55, F(hf.ry || hf.rx) * 0.55, 0, 0, Math.PI * 2);
+        ctx.fillStyle = hf.innerColor;
+        ctx.fill();
+      }
       ctx.restore();
     }
     ctx.restore();
@@ -4280,7 +4607,7 @@ function slimeBlinkAmount(seed, now) {
 
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const cfg = slime.config;
-  const features = cfg.isAnimal && cfg.features ? cfg.features : null;
+  const features = (cfg.isAnimal || cfg.isFish) && cfg.features ? cfg.features : null;
   const eyeStyle = features && features.eyeStyle ? features.eyeStyle : null;
   const eyeOff = features && features.eyeOffset
     ? { x: features.eyeOffset.x * sizeX, y: features.eyeOffset.y * sizeY }
