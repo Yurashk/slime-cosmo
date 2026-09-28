@@ -1636,17 +1636,15 @@ body::before {
   margin: 0;
   font-family: 'Orbitron', 'Montserrat', sans-serif;
   font-weight: 900;
-  font-size: clamp(15px, 4vw, 26px);
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  background: linear-gradient(90deg, var(--neon-cyan, #00e5ff), var(--neon-pink, #ff39c9), var(--neon-green, #14ff62));
-  background-size: 200% auto;
+  font-size: clamp(17px, 4.6vw, 28px);
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  background: linear-gradient(92deg, #00E8FF 0%, #7C9BFF 45%, #FF3399 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 12px rgba(255, 0, 127, 0.5));
-  opacity: 0.95;
-  animation: glow-pulse 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(0, 232, 255, 0.5));
+  opacity: 0.96;
 }
 
 .start-subtitle {
@@ -1723,27 +1721,35 @@ body::before {
 }
 
 .start-play {
-  min-width: min(70vw, 280px);
+  min-width: min(70vw, 290px);
+  padding: 15px 40px;
   pointer-events: auto;
   font-family: 'Orbitron', 'Montserrat', sans-serif;
-  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-  border: none;
-  color: #06121f;
-  font-weight: 900;
+  font-size: clamp(16px, 4vw, 21px);
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+  text-transform: uppercase;
+  color: #ffffff;
+  border: 1.5px solid rgba(0, 232, 255, 0.75);
+  border-radius: 999px;
+  background: linear-gradient(100deg, #00E8FF 0%, #1B7BFF 55%, #2B3BE0 100%);
   box-shadow:
-    0 0 25px rgba(79, 172, 254, 0.6),
-    0 4px 15px rgba(0, 0, 0, 0.4);
+    0 0 16px rgba(0, 232, 255, 0.45),
+    0 0 34px rgba(40, 90, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(4, 20, 60, 0.35);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .start-play:hover {
-  transform: scale(1.05);
+  transform: translateY(-1px);
   box-shadow:
-    0 0 35px rgba(0, 242, 254, 0.9),
-    0 6px 20px rgba(0, 0, 0, 0.5);
+    0 0 22px rgba(0, 232, 255, 0.7),
+    0 0 48px rgba(40, 90, 255, 0.45);
 }
 
 .start-play:active {
-  transform: scale(0.98);
+  transform: translateY(0);
 }
 
 .start-play.disabled {

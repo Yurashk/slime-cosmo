@@ -1,14 +1,24 @@
 import { THEMES, THEME_ORDER, themeSlimeLevels, entityIdOf } from './themes/registry.js';
+import { COLLECTIONS } from './SlimeConfig.js';
 import { progress } from './state.js';
 
 const FONT = "'Orbitron', 'Montserrat', sans-serif";
-const EMOJI = { space: '🪐', animals: '🦁', ocean: '🐙' };
+
+const POD_DISPLAY = {
+  space: { kind: 'planets', title: 'Space', icon: '🪐' },
+  animals: { kind: 'animals', title: 'Animals', icon: '🦁' },
+  ocean: { kind: 'emoji', title: 'Emoji', icon: '😍' }
+};
 const NEON = {
   cyan: '#00f3ff',
   magenta: '#ff0055',
   green: '#00ff66'
 };
 const BLACK = '#050608';
+
+function podDisplay(id) {
+  return POD_DISPLAY[id] || { kind: 'default', title: id, icon: '' };
+}
 
 function clamp(lo, v, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -44,6 +54,14 @@ function text(g, str, x, y, size, color, glow, alpha, spacing) {
     g.fillText(str, x, y);
   }
   g.restore();
+}
+
+function withAlpha(hex, a) {
+  const h = String(hex || '#ffffff').replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return `rgba(255,255,255,${a})`;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 function roundRectPath(g, x, y, w, h, r) {
@@ -102,6 +120,7 @@ export function createStartScreen(opts) {
 
   function podData(W, H, cx, podW, id) {
     const t = THEMES[id];
+    const disp = podDisplay(id);
     const s = Math.min(W, H);
     const capH = clamp(8, H * 0.011, 12);
     const podTop = H * 0.245;
@@ -109,12 +128,14 @@ export function createStartScreen(opts) {
     const headerH = clamp(24, H * 0.032, 30);
     const slimeY0 = podTop + headerH;
     const podBottom = H * 0.82;
-    const slotsY1 = podBottom - 8;
-    const n = 9;
-    const step = (slotsY1 - slimeY0) / (n - 1);
+    const n = disp.kind === 'emoji' ? 5 : 9;
     const r = clamp(15, s * 0.042, 22);
+    const slotsY1 = disp.kind === 'emoji' ? podBottom - r - 10 : podBottom - 8;
+    const step = (slotsY1 - slimeY0) / (n - 1);
     const sway = clamp(14, podW * 0.2, 26);
-    const levels = themeSlimeLevels(id);
+    const levels = disp.kind === 'emoji'
+      ? Object.keys(COLLECTIONS.ocean.levels).map(Number).sort((a, b) => a - b)
+      : themeSlimeLevels(id);
     const slots = levels.map((lv, i) => ({
       level: lv,
       entityId: entityIdOf(id, lv),
@@ -128,13 +149,16 @@ export function createStartScreen(opts) {
     const maxLv = unlocked ? progress.getThemeMaxLevel(id) : 0;
     return {
       id,
-      title: t.title.toUpperCase(),
+      kind: disp.kind,
+      title: disp.title.toUpperCase(),
+      icon: disp.icon,
       accent: t.accent,
       accentGlow: t.accentGlow,
       lockShape: t.lockShape,
       playable: t.playable,
       unlocked,
       maxLv,
+      slotCount: levels.length,
       slots,
       cx,
       podW,
@@ -155,6 +179,7 @@ export function createStartScreen(opts) {
     const yBot = yTop + r * 2.2;
     return {
       r,
+      bottom: yBot + r,
       cubes: [
         { entityId: 'base:1', x: Math.round(cx - r * 1.1), y: Math.round(yTop), r },
         { entityId: 'base:2', x: Math.round(cx + r * 1.1), y: Math.round(yTop), r },
@@ -195,41 +220,55 @@ export function createStartScreen(opts) {
     return THEME_ORDER[activeIndex];
   }
 
-function drawNebula(g, now) {
-  const W = rect.width;
-  const H = rect.height;
-  const breath = 0.5 + 0.5 * Math.sin(now * 0.0004);
-  const n1 = g.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.5);
-  n1.addColorStop(0, `rgba(0, 243, 255, ${0.05 + 0.03 * breath})`);
-  n1.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  g.fillStyle = n1;
-  g.fillRect(0, 0, W, H);
-  const n2 = g.createRadialGradient(W * 0.88, H * 0.78, 0, W * 0.88, H * 0.78, W * 0.55);
-  n2.addColorStop(0, `rgba(255, 0, 85, ${0.04 + 0.02 * breath})`);
-  n2.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  g.fillStyle = n2;
-  g.fillRect(0, 0, W, H);
-  const n3 = g.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, W * 0.42);
-  n3.addColorStop(0, `rgba(79, 172, 254, ${0.025 + 0.02 * breath})`);
-  n3.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  g.fillStyle = n3;
-  g.fillRect(0, 0, W, H);
-}
-
-  function drawStars(g, now) {
+  function drawNebula(g) {
     const W = rect.width;
     const H = rect.height;
-    for (let i = 0; i < 40; i++) {
-      const fx = (i * 0.618034) % 1;
-      const fy = ((i * 0.381966) % 1 + now * 0.00001 * (i % 3 + 1)) % 1;
-      if (fy > 0.88) continue;
-      g.globalAlpha = 0.05 + 0.1 * Math.abs(Math.sin(now * 0.0016 + i * 1.7));
-      g.fillStyle = i % 4 === 0 ? '#c7d8ff' : '#9fe8ff';
-      g.beginPath();
-      g.arc(fx * W, fy * H, 0.6 + (i % 3) * 0.5, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
+
+    // 1. Базовая заливка: глубокий тёмно-фиолетовый / индиго.
+    const base = g.createLinearGradient(0, 0, W * 0.35, H);
+    base.addColorStop(0, '#0B0D1B');
+    base.addColorStop(0.55, '#101433');
+    base.addColorStop(1, '#161936');
+    g.fillStyle = base;
+    g.fillRect(0, 0, W, H);
+
+    // 2. Очень мягкое, едва заметное внутреннее свечение по центру.
+    const core = g.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, W * 0.78);
+    core.addColorStop(0, 'rgba(96, 116, 220, 0.16)');
+    core.addColorStop(0.45, 'rgba(70, 84, 180, 0.07)');
+    core.addColorStop(1, 'rgba(60, 70, 160, 0)');
+    g.fillStyle = core;
+    g.fillRect(0, 0, W, H);
+
+    // 3. Мягкая виньетка по краям — держит фокус на панелях.
+    const vig = g.createRadialGradient(W * 0.5, H * 0.45, W * 0.3, W * 0.5, H * 0.5, W * 0.95);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(1, 'rgba(2, 3, 12, 0.5)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, W, H);
+  }
+
+  // Тонкая зафиксированная линия баланса: от верхнего стека слаймов к активной батарейке.
+  function drawBalanceLine(g) {
+    const active = layout.pods.find(p => p.id === selectedThemeId()) || layout.pods[0];
+    if (!active) return;
+
+    const x1 = rect.width * 0.5;
+    const y1 = pyramidData(rect.width, rect.height).bottom;
+    const x2 = active.cx;
+    const y2 = active.top;
+    if (!(y2 > y1)) return;
+
+    // Корпус линии — тонкая, без пульсаций.
+    g.save();
+    g.lineCap = 'round';
+    g.strokeStyle = withAlpha(active.accent, 0.34);
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(x2, y2);
+    g.stroke();
+    g.restore();
   }
 
   function drawPyramid(g, now) {
@@ -288,21 +327,7 @@ function drawNebula(g, now) {
 
   function shapePath(g, col, slot) {
     const r = slot.r;
-    const puffer = col.lockShape === 'fish' && slot.level % 2 === 0;
-    if (col.lockShape === 'fish') {
-      g.beginPath();
-      if (puffer) {
-        g.moveTo(-r * 0.58, 0);
-        g.lineTo(-r * 0.95, -r * 0.3);
-        g.lineTo(-r * 0.95, r * 0.3);
-      } else {
-        g.moveTo(-r * 0.55, 0);
-        g.lineTo(-r * 1.02, -r * 0.44);
-        g.lineTo(-r * 1.02, r * 0.44);
-      }
-      g.closePath();
-      g.ellipse(r * 0.02, 0, r * 0.6, r * 0.56, 0, 0, Math.PI * 2);
-    } else if (col.lockShape === 'animal') {
+    if (col.lockShape === 'animal') {
       const variant = slot.level % 3;
       if (variant === 0) {
         g.moveTo(-r * 0.48, -r * 0.16);
@@ -388,23 +413,23 @@ function drawBlackSilhouette(g, pod, slot, alpha, now = performance.now()) {
       break;
     }
 
-    case 'ocean': // 🌊 ОКЕАН / ВОДНЫЙ МИР
+    case 'ocean': // 😍 EMOJI
     case 'water': {
-      // Плавная волна + микро-пузырёк
-      const waveOffset = Math.sin(now * 0.003 + slot.level) * 3;
-      
-      // Внутренний полупрозрачный пузырек
+      // Заблокированный эмодзи: милый знак вопроса в стеклянном квадрате
+      const bob = Math.sin(now * 0.0026 + slot.level) * r * 0.06;
       g.beginPath();
-      g.arc(x + waveOffset * 0.5, y - r * 0.15 + waveOffset, r * 0.15, 0, Math.PI * 2);
-      g.fillStyle = 'rgba(0, 180, 255, 0.4)';
+      if (g.roundRect) g.roundRect(x - r * 0.5, y - r * 0.5 + bob, r, r, r * 0.3);
+      else g.rect(x - r * 0.5, y - r * 0.5 + bob, r, r);
+      g.fillStyle = 'rgba(255, 140, 220, 0.22)';
       g.fill();
-
-      // Волнистая линия в центре слота
-      g.beginPath();
-      g.arc(x, y + r * 0.1, r * 0.38, 0.2, Math.PI - 0.2);
-      g.strokeStyle = 'rgba(0, 180, 255, 0.3)';
-      g.lineWidth = 1.5;
+      g.strokeStyle = 'rgba(255, 190, 240, 0.4)';
+      g.lineWidth = 1.2;
       g.stroke();
+      g.font = `${r * 0.7}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = 'rgba(255, 235, 250, 0.55)';
+      g.fillText('❔', x, y + bob + r * 0.06);
       break;
     }
 
@@ -444,51 +469,47 @@ function drawPod(g, pod, now) {
     const pw = pod.podW;
     const ph = pb - py;
 
-    // 1. Внешняя глубокая тень под колбой (объём в пространстве)
+    // 1. Внешняя тень карточки
     g.save();
     roundRectPath(g, px, py, pw, ph, 16);
-    g.shadowColor = 'rgba(0, 0, 0, 0.75)';
-    g.shadowBlur = 20;
-    g.shadowOffsetY = 10;
-    g.fillStyle = '#050608';
+    g.shadowColor = isActive ? withAlpha(pod.accent, 0.35) : 'rgba(0, 0, 0, 0.6)';
+    g.shadowBlur = isActive ? 26 : 16;
+    g.shadowOffsetY = 8;
+    g.fillStyle = '#05060f';
     g.fill();
     g.restore();
 
-    // 2. Фон внутри стекла: более темный, прозрачный и сочный (убрали серую муть)
+    // 2. Тёмное глянцевое стекло
     roundRectPath(g, px, py, pw, ph, 16);
     g.save();
     g.clip();
-    
+
     const bgGrad = g.createLinearGradient(px, py, px, pb);
     if (isActive) {
-      // Активная колба — глубокий темно-синий с бирюзовым отливом
-      bgGrad.addColorStop(0, 'rgba(8, 20, 42, 0.55)');
-      bgGrad.addColorStop(0.5, 'rgba(4, 10, 24, 0.65)');
-      bgGrad.addColorStop(1, 'rgba(2, 4, 12, 0.8)');
+      bgGrad.addColorStop(0, 'rgba(64, 84, 150, 0.30)');
+      bgGrad.addColorStop(0.5, 'rgba(38, 50, 104, 0.26)');
+      bgGrad.addColorStop(1, 'rgba(24, 30, 72, 0.34)');
     } else {
-      // Неактивная колба — чистый темный ночной индиго (без серой гаммы)
-      bgGrad.addColorStop(0, 'rgba(6, 10, 26, 0.45)');
-      bgGrad.addColorStop(0.6, 'rgba(3, 5, 16, 0.6)');
-      bgGrad.addColorStop(1, 'rgba(1, 2, 8, 0.75)');
+      bgGrad.addColorStop(0, 'rgba(38, 44, 78, 0.34)');
+      bgGrad.addColorStop(0.55, 'rgba(24, 28, 56, 0.34)');
+      bgGrad.addColorStop(1, 'rgba(14, 16, 36, 0.42)');
     }
     g.fillStyle = bgGrad;
     g.fillRect(px, py, pw, ph);
 
-    // Легкая глубина по краям стекла
-    const innerShadow = g.createRadialGradient(pod.cx, py + ph / 2, pw * 0.2, pod.cx, py + ph / 2, pw * 0.85);
-    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    innerShadow.addColorStop(1, 'rgba(1, 3, 10, 0.5)');
-    g.fillStyle = innerShadow;
-    g.fillRect(px, py, pw, ph);
+    // Верхний рефлекс стекла — узкая светлая полоса
+    const sheen = g.createLinearGradient(px, py, px, py + ph * 0.32);
+    sheen.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.16 : 0.09})`);
+    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = sheen;
+    g.fillRect(px, py, pw, ph * 0.32);
 
-    // Мягкое внутреннее неон-ядро для активной карточки
-    if (isActive) {
-      const ig = g.createRadialGradient(pod.cx, py + ph * 0.4, 0, pod.cx, py + ph * 0.4, hw * 1.2);
-      ig.addColorStop(0, 'rgba(0, 243, 255, 0.08)');
-      ig.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      g.fillStyle = ig;
-      g.fillRect(px, py, pw, ph);
-    }
+    // Внутреннее затемнение по краям — стекло «уходит» в глубину
+    const inner = g.createRadialGradient(pod.cx, py + ph * 0.42, pw * 0.2, pod.cx, py + ph / 2, pw * 0.85);
+    inner.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    inner.addColorStop(1, 'rgba(4, 6, 18, 0.5)');
+    g.fillStyle = inner;
+    g.fillRect(px, py, pw, ph);
 
     // 3. Отрисовка слаймов с УМЕНЬШЕННЫМ (более аккуратным) свечением
    pod.slots.forEach(slot => {
@@ -513,70 +534,63 @@ function drawPod(g, pod, now) {
       }
     });
 
-    // 4. ГЛЯНЦЕВЫЕ БЛИКИ И ОТРАЖЕНИЯ (Glass Reflection)
-    // Диагональный резкий блик как на чистом стекле
-    g.beginPath();
-    g.moveTo(px, py);
-    g.lineTo(px + pw * 0.7, py);
-    g.lineTo(px, py + ph * 0.5);
-    g.closePath();
-    const specGrad = g.createLinearGradient(px, py, px + pw * 0.5, py + ph * 0.4);
-    specGrad.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.18 : 0.09})`);
-    specGrad.addColorStop(0.3, `rgba(255, 255, 255, ${isActive ? 0.05 : 0.02})`);
-    specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    g.fillStyle = specGrad;
-    g.fill();
+    // 4. Чёткий рефлекс по верхней кромке стекла
+    g.save();
+    roundRectPath(g, px + 1, py + 1, pw - 2, ph - 2, 15);
+    g.clip();
+    const edge = g.createLinearGradient(px, py, px, py + 14);
+    edge.addColorStop(0, `rgba(255, 255, 255, ${isActive ? 0.34 : 0.2})`);
+    edge.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = edge;
+    g.fillRect(px, py, pw, 14);
+    g.restore();
 
-    // Верхняя светимая кромка стекла (Curvature highlight)
-    const topEdge = g.createLinearGradient(px, py, px, py + 12);
-    topEdge.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
-    topEdge.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    g.fillStyle = topEdge;
-    g.fillRect(px, py, pw, 12);
-
-    // Затемнение неактивных стекол
+    // Затемнение неактивных карточек
     if (glass > 0.01 && !isActive) {
-      g.fillStyle = `rgba(3, 5, 12, ${0.25 * glass})`;
+      g.fillStyle = `rgba(4, 6, 16, ${0.34 * glass})`;
       g.fillRect(px, py, pw, ph);
     }
 
     // Заблокированные карточки
     if (!pod.unlocked) {
-      g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      g.fillStyle = 'rgba(0, 0, 0, 0.42)';
       g.fillRect(px, py, pw, ph);
     }
     g.restore();
 
-    // 5. РАМКА И ОБЛАСТЬ КОЛБЫ (Объемный металлическо-стеклянный кант)
+    // 5. СОЧНЫЕ НЕОНОВЫЕ РАМКИ
     roundRectPath(g, px, py, pw, ph, 16);
     if (isActive) {
+      // Активная: яркий чёткий контур Cyan #00E8FF -> Hot Pink #FF3399
       const gg = g.createLinearGradient(px, py, px + pw, pb);
-      gg.addColorStop(0, '#00f2fe');
-      gg.addColorStop(1, '#4facfe');
+      gg.addColorStop(0, '#00E8FF');
+      gg.addColorStop(0.5, '#4FA8FF');
+      gg.addColorStop(1, '#FF3399');
+      g.save();
       g.strokeStyle = gg;
-      g.shadowColor = 'rgba(0, 242, 254, 0.6)';
-      g.shadowBlur = 10;
-      g.lineWidth = 2;
+      g.shadowColor = 'rgba(0, 232, 255, 0.9)';
+      g.shadowBlur = 14;
+      g.lineWidth = 2.4;
       g.stroke();
-      
-      // Внутренний тонкий светлый блик на кантике
-      roundRectPath(g, px + 1, py + 1, pw - 2, ph - 2, 15);
-      g.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      g.restore();
+
+      // Внутренний светлый кант
+      roundRectPath(g, px + 2.4, py + 2.4, pw - 4.8, ph - 4.8, 14);
+      g.strokeStyle = 'rgba(255, 255, 255, 0.3)';
       g.lineWidth = 1;
-      g.shadowBlur = 0;
       g.stroke();
-    } else if (pod.unlocked) {
-      g.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-      g.shadowColor = 'rgba(0, 180, 255, 0.15)';
-      g.shadowBlur = 4;
-      g.lineWidth = 1.2;
-      g.stroke();
-      g.shadowBlur = 0;
     } else {
-      g.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-      g.shadowBlur = 0;
-      g.lineWidth = 1;
+      // Неактивные: тонкий, но контрастный светящийся контур
+      const gg = g.createLinearGradient(px, py, px + pw, pb);
+      gg.addColorStop(0, withAlpha(pod.accent, pod.unlocked ? 0.6 : 0.24));
+      gg.addColorStop(1, withAlpha(pod.accent, pod.unlocked ? 0.34 : 0.14));
+      g.save();
+      g.strokeStyle = gg;
+      g.shadowColor = pod.unlocked ? pod.accentGlow : 'transparent';
+      g.shadowBlur = pod.unlocked ? 8 : 0;
+      g.lineWidth = pod.unlocked ? 1.4 : 1;
       g.stroke();
+      g.restore();
     }
 
     // 6. ВЕРХНЯЯ КРАШЕЧКА / КАТOД (Battery Cap)
@@ -603,7 +617,7 @@ function drawPod(g, pod, now) {
     g.textBaseline = 'middle';
     g.shadowColor = isActive ? pod.accentGlow : 'rgba(0,0,0,0)';
     g.shadowBlur = isActive ? 8 : 0;
-    g.fillText(EMOJI[pod.id] || '', pod.cx, pod.podTop + pod.headerH * 0.42);
+    g.fillText(pod.icon || '', pod.cx, pod.podTop + pod.headerH * 0.42);
     g.restore();
 
     if (!pod.unlocked) {
@@ -617,12 +631,12 @@ function drawPod(g, pod, now) {
     } else {
       text(
         g,
-        pod.maxLv + '/9',
+        pod.maxLv + '/' + pod.slotCount,
         pod.cx + hw - 22,
         pod.podTop + pod.headerH * 0.42,
         clamp(8, rect.width * 0.018, 12),
-        isActive ? 'rgba(120, 240, 255, 0.95)' : 'rgba(180, 205, 235, 0.65)',
-        isActive ? 'rgba(0, 243, 255, 0.4)' : null,
+        isActive ? 'rgba(150, 245, 255, 0.95)' : 'rgba(205, 220, 255, 0.7)',
+        isActive ? 'rgba(0, 243, 255, 0.45)' : null,
         0.9
       );
     }
@@ -649,9 +663,9 @@ function drawPod(g, pod, now) {
     });
 
     ctx.clearRect(0, 0, rect.width, rect.height);
-    drawNebula(ctx, now);
-    drawStars(ctx, now);
+    drawNebula(ctx);
     drawPyramid(ctx, now);
+    drawBalanceLine(ctx);
     layout.pods.forEach(p => drawPod(ctx, p, now));
 
     rafId = requestAnimationFrame(frame);
@@ -659,7 +673,7 @@ function drawPod(g, pod, now) {
 
   function updateLabels() {
     const t = THEMES[selectedThemeId()];
-    if (selectedLabelEl) selectedLabelEl.textContent = t ? t.title : '';
+    if (selectedLabelEl) selectedLabelEl.textContent = t ? podDisplay(selectedThemeId()).title : '';
     if (recordLabelEl) recordLabelEl.textContent = 'Record: ' + progress.getHighScore(selectedThemeId()).toLocaleString();
   }
 

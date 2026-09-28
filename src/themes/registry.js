@@ -52,10 +52,10 @@ export const THEMES = {
   },
   ocean: {
     id: 'ocean',
-    title: 'Ocean',
+    title: 'Emoji',
     accent: '#45ccff',
     accentGlow: 'rgba(70, 190, 255, 0.45)',
-    lockShape: 'fish',
+    lockShape: 'emoji',
     unlockRequirement: { themeId: 'animals', requiredLevel: 8 },
     playable: true,
     bowl: {

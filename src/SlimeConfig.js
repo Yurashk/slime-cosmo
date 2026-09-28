@@ -7,11 +7,11 @@ export const IRIDESCENT_LEVEL = 12;
 export const GOLDEN_LEVEL = 9;
 
 const LEVEL_THEMES = {
-  1: { color: '#00e8ff', glow: '#5af0ff' }, // starter (neon cyan accent)
-  2: { color: '#14ff62', glow: '#74ff90' }, // Neon Green
-  3: { color: '#ffdf1f', glow: '#fff07a' }, // Yellow
-  4: { color: '#ff9426', glow: '#ffc46e' }, // Orange
-  5: { color: '#ff3399', glow: '#ff7ec9' }  // Hot Pink
+  1: { color: '#00f0ff', glow: '#8ff9ff', visualStyle: 'solid', innerCore: true, aura: 0.5 }, // starter (neon cyan accent)
+  2: { color: '#0dff4f', glow: '#8dffab', visualStyle: 'solid', innerCore: true, aura: 0.55 }, // Neon Green
+  3: { color: '#ffd400', glow: '#fff38c', visualStyle: 'solid', innerCore: true, aura: 0.6 }, // Yellow
+  4: { color: '#ff7a12', glow: '#ffc98a', visualStyle: 'solid', innerCore: true, aura: 0.65 }, // Orange
+  5: { color: '#ff1f7a', glow: '#ff9ad2', visualStyle: 'solid', innerCore: true, aura: 0.7 }  // Hot Pink
 };
 
 export const COLLECTIONS = {
@@ -48,16 +48,15 @@ export const COLLECTIONS = {
   },
   ocean: {
     id: 'ocean',
-    name: 'Ocean',
+    name: 'Emoji',
     from: 6,
-    to: 11,
+    to: 10,
     levels: {
-      6: 'fugu',
-      7: 'anglerfish',
-      8: 'octopus',
-      9: 'jellyfish',
-      10: 'starfish',
-      11: 'seahorse'
+      6: 'heart',
+      7: 'fire',
+      8: 'devil',
+      9: 'angel',
+      10: 'surprised'
     }
   }
 };
@@ -71,7 +70,7 @@ const PLANETS = {
   saturn: { name: 'Saturn', base: '#D6B875', dark: '#77603a', light: '#ffefc4', rim: '#ffe9a8', glow: '#ffe2a0', surface: 'bands', ring: true, aura: 0.5, glowBlur: 48 },
   uranus: { name: 'Uranus', base: '#76D9E8', dark: '#2b7d93', light: '#c9f8ff', rim: '#9fefff', glow: '#9feaff', surface: 'smooth', ring: true, aura: 0.45, glowBlur: 46 },
   neptune: { name: 'Neptune', base: '#356BD6', dark: '#14295e', light: '#7fb0ff', rim: '#6fb6ff', glow: '#7fb6ff', surface: 'storm', aura: 0.7, glowBlur: 52 },
-  sun: { name: 'Sun', base: '#FFC83D', dark: '#c5761b', light: '#fff3a6', rim: '#fff7cc', glow: '#ffb347', surface: 'corona', aura: 1, glowBlur: 60, particles: 'solar_flare' }
+  sun: { name: 'Sun', base: '#FFC83D', dark: '#c5761b', light: '#fff3a6', rim: '#fff7cc', glow: '#ffb347', surface: 'corona', aura: 1, glowBlur: 60, particles: 'solar_flare', golden: true }
 };
 
 const PLANET_BANDS = {
@@ -91,18 +90,36 @@ const ANIMALS = {
     glowBlur: 44,
     surface: 'smooth',
     features: {
-      belly: { x: 0, y: 0.2, width: 0.68, height: 0.48, color: '#DCFFDF' },
+      belly: {
+        x: 0, y: 0.16, width: 0.8, height: 0.6,
+        gradient: { from: '#F6FFFA', fromAlpha: 1, mid: '#D8F7E1', midAlpha: 0.95, midAt: 0.62, to: '#B4EEC6', toAlpha: 0 }
+      },
+      spots: [
+        { x: -0.2, y: -0.16, r: 0.055, color: '#2CB843', alpha: 0.32 },
+        { x: 0.14, y: -0.26, r: 0.042, color: '#2CB843', alpha: 0.28 },
+        { x: 0.28, y: 0.02, r: 0.05, color: '#2CB843', alpha: 0.28 },
+        { x: -0.3, y: 0.06, r: 0.036, color: '#2CB843', alpha: 0.24 }
+      ],
+      earEdge: '#1B6327',
       ears: [
-        { x: -0.31, y: -0.44, r: 0.19, color: '#61E375', innerColor: '#A8FFB5' },
-        { x: 0.31, y: -0.44, r: 0.19, color: '#61E375', innerColor: '#A8FFB5' }
+        { x: -0.24, y: -0.27, r: 0.12, color: '#5ADA70', innerColor: '#C8FFD4', edgeColor: '#1B6327', edgeAlpha: 0.7 },
+        { x: 0.24, y: -0.27, r: 0.12, color: '#5ADA70', innerColor: '#C8FFD4', edgeColor: '#1B6327', edgeAlpha: 0.7 }
       ],
+      nostrils: [
+        { x: -0.075, y: -0.03, r: 0.022, color: '#1B6327' },
+        { x: 0.075, y: -0.03, r: 0.022, color: '#1B6327' }
+      ],
+      mouth: { type: 'wide_smile', x: 0, y: 0.06, width: 0.5, height: 0.13, strokeColor: '#08330F', alpha: 1, lineWidth: 3.6, halo: '#F7FFFA', haloAlpha: 0.95, haloSpread: 4.5 },
       cheeks: [
-        { x: -0.31, y: 0.12, r: 0.095, color: '#FF9EBF' },
-        { x: 0.31, y: 0.12, r: 0.095, color: '#FF9EBF' }
+        { x: -0.34, y: -0.17, r: 0.13, color: '#FF6E9E', alpha: 1, soft: true, softStop: 0.32, softMid: 0.55 },
+        { x: 0.34, y: -0.17, r: 0.13, color: '#FF6E9E', alpha: 1, soft: true, softStop: 0.32, softMid: 0.55 }
       ],
-      mouth: { type: 'smile', x: 0, y: 0.1, width: 0.22, height: 0.1, strokeColor: '#1B6327', lineWidth: 3 },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#1A291E', highlights: true },
-      eyeOffset: { x: 0.31, y: -0.43 }
+      feet: [
+        { x: -0.2, y: 0.33, rx: 0.115, ry: 0.065, angle: -16, color: '#4FD162', edgeColor: '#2CB843', edgeAlpha: 0.45, toes: 3, toeColor: '#1B6327' },
+        { x: 0.2, y: 0.33, rx: 0.115, ry: 0.065, angle: 16, color: '#4FD162', edgeColor: '#2CB843', edgeAlpha: 0.45, toes: 3, toeColor: '#1B6327' }
+      ],
+      eyeStyle: { width: 0.185, height: 0.24, pupilColor: '#12301A', highlights: true },
+      eyeOffset: { x: 0.235, y: -0.255 }
     }
   },
   lion: {
@@ -116,18 +133,23 @@ const ANIMALS = {
     glowBlur: 46,
     surface: 'smooth',
     features: {
-      ears: [
-        { x: -0.38, y: -0.42, r: 0.19, color: '#FF9E3B', innerColor: '#FFCB8B' },
-        { x: 0.38, y: -0.42, r: 0.19, color: '#FF9E3B', innerColor: '#FFCB8B' }
-      ],
-      snout: { x: 0, y: 0.12, width: 0.44, height: 0.3, color: '#FFE0B8', noseColor: '#4A2500', noseSize: 0.075 },
+      mane: { color: '#FFD79E', count: 20, radiusOffset: -0.12, length: 0.1, width: 0.075, alpha: 0.9 },
+      belly: { x: 0, y: 0.27, width: 0.54, height: 0.3, color: '#FFDCA8', edgeColor: '#A85600', edgeAlpha: 0.45 },
+      snout: {
+        x: 0, y: 0.14, width: 0.5, height: 0.36, color: '#FFE6C4', edgeColor: '#A85600', edgeAlpha: 0.5,
+        muzzleColor: '#FFF8EC', muzzleAlpha: 0.75, noseColor: '#331600', noseSize: 0.088
+      },
       cheeks: [
-        { x: -0.35, y: 0.08, r: 0.085, color: '#FF8585' },
-        { x: 0.35, y: 0.08, r: 0.085, color: '#FF8585' }
+        { x: -0.35, y: 0.09, r: 0.095, color: '#FF8585', alpha: 0.5 },
+        { x: 0.35, y: 0.09, r: 0.095, color: '#FF8585', alpha: 0.5 }
       ],
-      mouth: { type: 'bear_snout', x: 0, y: 0.16, strokeColor: '#4A2500' },
-      eyeStyle: { width: 0.15, height: 0.2, pupilColor: '#2B1400', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.1 }
+      mouth: { type: 'bear_snout', x: 0, y: 0.22, strokeColor: '#331600' },
+      feet: [
+        { x: -0.19, y: 0.325, rx: 0.105, ry: 0.068, angle: -12, color: '#F09029', edgeColor: '#A85600', edgeAlpha: 0.45, toes: 3, toeColor: '#8A4300' },
+        { x: 0.19, y: 0.325, rx: 0.105, ry: 0.068, angle: 12, color: '#F09029', edgeColor: '#A85600', edgeAlpha: 0.45, toes: 3, toeColor: '#8A4300' }
+      ],
+      eyeStyle: { width: 0.155, height: 0.205, pupilColor: '#241000', highlights: true },
+      eyeOffset: { x: 0.23, y: -0.12 }
     }
   },
   zebra: {
@@ -141,22 +163,31 @@ const ANIMALS = {
     glowBlur: 44,
     surface: 'smooth',
     features: {
-      tuft: [
-        { x: 0, y: -0.48, r: 0.13, color: '#FFDC43' },
-        { x: -0.1, y: -0.44, r: 0.1, color: '#FFDC43' },
-        { x: 0.1, y: -0.44, r: 0.1, color: '#FFDC43' }
+      belly: { x: 0, y: 0.23, width: 0.56, height: 0.36, color: '#FFFBE8', edgeColor: '#B8860B', edgeAlpha: 0.45 },
+      crest: [
+        { x: -0.08, y: -0.32, angle: -26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928' },
+        { x: 0, y: -0.35, angle: 0, length: 0.14, width: 0.05, color: '#F59300', tipColor: '#FFD84A' },
+        { x: 0.08, y: -0.32, angle: 26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928' }
       ],
       wings: [
-        { x: -0.43, y: 0.02, rx: 0.13, ry: 0.22, angle: -18, color: '#FFC928' },
-        { x: 0.43, y: 0.02, rx: 0.13, ry: 0.22, angle: 18, color: '#FFC928' }
+        { x: -0.33, y: 0.03, rx: 0.115, ry: 0.185, angle: -20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34 },
+        { x: 0.33, y: 0.03, rx: 0.115, ry: 0.185, angle: 20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34 }
       ],
-      beak: { x: 0, y: 0.08, width: 0.17, height: 0.12, color: '#FF8A00' },
+      beak: { x: 0, y: 0.08, width: 0.22, height: 0.15, color: '#FF8A00', tipColor: '#C24A00' },
+      nostrils: [
+        { x: -0.045, y: -0.01, r: 0.018, color: '#B8860B' },
+        { x: 0.045, y: -0.01, r: 0.018, color: '#B8860B' }
+      ],
       cheeks: [
-        { x: -0.32, y: 0.1, r: 0.095, color: '#FF889B' },
-        { x: 0.32, y: 0.1, r: 0.095, color: '#FF889B' }
+        { x: -0.32, y: 0.11, r: 0.1, color: '#FF889B', alpha: 0.55 },
+        { x: 0.32, y: 0.11, r: 0.1, color: '#FF889B', alpha: 0.55 }
       ],
-      eyeStyle: { width: 0.18, height: 0.24, pupilColor: '#261C00', highlights: true },
-      eyeOffset: { x: 0.24, y: -0.12 }
+      feet: [
+        { x: -0.145, y: 0.35, rx: 0.08, ry: 0.05, angle: -14, color: '#FF9E1B', edgeColor: '#C96A00', edgeAlpha: 0.7, toes: 3, toeColor: '#C96A00' },
+        { x: 0.145, y: 0.35, rx: 0.08, ry: 0.05, angle: 14, color: '#FF9E1B', edgeColor: '#C96A00', edgeAlpha: 0.7, toes: 3, toeColor: '#C96A00' }
+      ],
+      eyeStyle: { width: 0.2, height: 0.26, pupilColor: '#1E1600', highlights: true },
+      eyeOffset: { x: 0.25, y: -0.14 }
     }
   },
   monkey: {
@@ -170,18 +201,40 @@ const ANIMALS = {
     glowBlur: 46,
     surface: 'smooth',
     features: {
+      belly: { x: 0, y: 0.26, width: 0.54, height: 0.32, color: '#FFDDE9', edgeColor: '#C7386B', edgeAlpha: 0.45 },
+      earEdge: '#B32C5C',
       ears: [
-        { x: -0.28, y: -0.56, rx: 0.105, ry: 0.25, color: '#FF94B9', innerColor: '#FFC8DC' },
-        { x: 0.28, y: -0.56, rx: 0.105, ry: 0.25, color: '#FF94B9', innerColor: '#FFC8DC' }
+        { x: -0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0' },
+        { x: 0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0' }
       ],
-      snout: { x: 0, y: 0.1, width: 0.31, height: 0.22, color: '#FFF0F6', noseColor: '#FF548E', noseSize: 0.06 },
+      snout: {
+        x: 0, y: 0.09, width: 0.34, height: 0.25, color: '#FFF4F8', edgeColor: '#C7386B', edgeAlpha: 0.45,
+        noseColor: '#FF3D80', noseSize: 0.065
+      },
+      mouth: { type: 'w_mouth', x: 0, y: 0.2, width: 0.15, height: 0.06, strokeColor: '#7A1639', lineWidth: 2.6 },
+      teeth: { x: 0, y: 0.29, width: 0.088, height: 0.078, color: '#FFFDF8', lineColor: '#7A1639', lineAlpha: 0.45 },
+      whiskers: {
+        color: '#4A0820', alpha: 0.9, width: 0.02,
+        items: [
+          { x1: -0.13, y1: 0.08, x2: -0.4, y2: 0.0, bend: -0.02 },
+          { x1: -0.13, y1: 0.1, x2: -0.39, y2: 0.1, bend: -0.02 },
+          { x1: -0.13, y1: 0.12, x2: -0.38, y2: 0.19, bend: -0.02 },
+          { x1: 0.13, y1: 0.08, x2: 0.4, y2: 0.0, bend: 0.02 },
+          { x1: 0.13, y1: 0.1, x2: 0.39, y2: 0.1, bend: 0.02 },
+          { x1: 0.13, y1: 0.12, x2: 0.38, y2: 0.19, bend: 0.02 }
+        ]
+      },
       cheeks: [
-        { x: -0.32, y: 0.12, r: 0.09, color: '#FF548E' },
-        { x: 0.32, y: 0.12, r: 0.09, color: '#FF548E' }
+        { x: -0.33, y: 0.12, r: 0.1, color: '#FF548E', alpha: 0.5 },
+        { x: 0.33, y: 0.12, r: 0.1, color: '#FF548E', alpha: 0.5 }
       ],
-      tail: { x: 0.48, y: 0.3, r: 0.14, color: '#FFC8DC' },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#30101C', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.12 }
+      feet: [
+        { x: -0.18, y: 0.335, rx: 0.1, ry: 0.065, angle: -10, color: '#FFB0CD', edgeColor: '#C7386B', edgeAlpha: 0.4, toes: 3, toeColor: '#C7386B' },
+        { x: 0.18, y: 0.335, rx: 0.1, ry: 0.065, angle: 10, color: '#FFB0CD', edgeColor: '#C7386B', edgeAlpha: 0.4, toes: 3, toeColor: '#C7386B' }
+      ],
+      tail: { x: 0.33, y: 0.21, r: 0.105, color: '#FFF4F8' },
+      eyeStyle: { width: 0.19, height: 0.25, pupilColor: '#2A0C1A', highlights: true },
+      eyeOffset: { x: 0.225, y: -0.115 }
     }
   },
   elephant: {
@@ -195,18 +248,35 @@ const ANIMALS = {
     glowBlur: 44,
     surface: 'smooth',
     features: {
-      belly: { x: 0, y: 0.22, width: 0.65, height: 0.48, color: '#FFFFFF' },
+      belly: { x: 0, y: 0.23, width: 0.56, height: 0.36, color: '#FFFFFF', edgeColor: '#0E7FA8', edgeAlpha: 0.4 },
+      crest: [
+        { x: -0.07, y: -0.32, angle: -30, length: 0.12, width: 0.045, color: '#25BBD9', tipColor: '#B2F4FF' },
+        { x: 0.01, y: -0.35, angle: -4, length: 0.145, width: 0.05, color: '#37CDF0', tipColor: '#B2F4FF' }
+      ],
       wings: [
-        { x: -0.43, y: 0.03, rx: 0.13, ry: 0.21, angle: -18, color: '#25BBD9' },
-        { x: 0.43, y: 0.03, rx: 0.13, ry: 0.21, angle: 18, color: '#25BBD9' }
+        { x: -0.33, y: 0.04, rx: 0.115, ry: 0.185, angle: -20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32 },
+        { x: 0.33, y: 0.04, rx: 0.115, ry: 0.185, angle: 20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32 }
       ],
-      beak: { x: 0, y: 0.06, width: 0.15, height: 0.1, color: '#FF9E2C' },
+      tailFeathers: [
+        { x: -0.02, y: 0.3, angle: 212, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF' },
+        { x: 0.02, y: 0.33, angle: 180, length: 0.16, width: 0.055, color: '#37CDF0', tipColor: '#B2F4FF' },
+        { x: 0.02, y: 0.3, angle: 148, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF' }
+      ],
+      beak: { x: 0, y: 0.07, width: 0.3, height: 0.2, color: '#FF8A00', tipColor: '#C24A00' },
+      nostrils: [
+        { x: -0.047, y: -0.012, r: 0.018, color: '#0E7FA8' },
+        { x: 0.047, y: -0.012, r: 0.018, color: '#0E7FA8' }
+      ],
       cheeks: [
-        { x: -0.3, y: 0.08, r: 0.08, color: '#FF88B8' },
-        { x: 0.3, y: 0.08, r: 0.08, color: '#FF88B8' }
+        { x: -0.31, y: 0.09, r: 0.09, color: '#FF88B8', alpha: 0.5 },
+        { x: 0.31, y: 0.09, r: 0.09, color: '#FF88B8', alpha: 0.5 }
       ],
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#0B2933', highlights: true },
-      eyeOffset: { x: 0.23, y: -0.12 }
+      feet: [
+        { x: -0.145, y: 0.35, rx: 0.08, ry: 0.05, angle: -14, color: '#FF9E1B', edgeColor: '#D96A00', edgeAlpha: 0.7, toes: 3, toeColor: '#D96A00' },
+        { x: 0.145, y: 0.35, rx: 0.08, ry: 0.05, angle: 14, color: '#FF9E1B', edgeColor: '#D96A00', edgeAlpha: 0.7, toes: 3, toeColor: '#D96A00' }
+      ],
+      eyeStyle: { width: 0.195, height: 0.26, pupilColor: '#06222B', highlights: true },
+      eyeOffset: { x: 0.24, y: -0.15 }
     }
   },
   flamingo: {
@@ -221,224 +291,111 @@ const ANIMALS = {
     surface: 'smooth',
     features: {
       antenna: [
-        { x: -0.2, y: -0.48, rx: 0.03, ry: 0.12, color: '#332300', ballR: 0.06 },
-        { x: 0.2, y: -0.48, rx: 0.03, ry: 0.12, color: '#332300', ballR: 0.06 }
+        { x: -0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045 },
+        { x: 0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045 }
       ],
       stripes: [
-        { y: -0.12, height: 0.1, color: '#332300' },
-        { y: 0.1, height: 0.1, color: '#332300' }
+        { y: 0.06, height: 0.11, color: '#332300' },
+        { y: 0.28, height: 0.11, color: '#332300' }
       ],
       wings: [
-        { x: -0.48, y: -0.1, rx: 0.14, ry: 0.22, angle: -25, color: 'rgba(255, 255, 255, 0.72)' },
-        { x: 0.48, y: -0.1, rx: 0.14, ry: 0.22, angle: 25, color: 'rgba(255, 255, 255, 0.72)' }
+        { x: -0.33, y: -0.07, rx: 0.105, ry: 0.175, angle: -27, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3 },
+        { x: 0.33, y: -0.07, rx: 0.105, ry: 0.175, angle: 27, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3 }
       ],
+      stinger: { x: 0, y: 0.36, angle: 96, length: 0.115, width: 0.07, color: '#332300' },
       cheeks: [
-        { x: -0.3, y: 0.12, r: 0.09, color: '#FF7D7D' },
-        { x: 0.3, y: 0.12, r: 0.09, color: '#FF7D7D' }
+        { x: -0.31, y: 0.13, r: 0.095, color: '#FF7D7D', alpha: 0.55 },
+        { x: 0.31, y: 0.13, r: 0.095, color: '#FF7D7D', alpha: 0.55 }
       ],
-      mouth: { type: 'smile', x: 0, y: 0.12, width: 0.18, height: 0.08, strokeColor: '#332300', lineWidth: 3 },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#261A00', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.1 }
+      mouth: { type: 'open_smile', x: 0, y: 0.12, width: 0.2, height: 0.11, strokeColor: '#332300', tongueColor: '#FF8FA8' },
+      feet: [
+        { x: -0.13, y: 0.35, rx: 0.062, ry: 0.04, angle: -8, color: '#4A3300' },
+        { x: 0.13, y: 0.35, rx: 0.062, ry: 0.04, angle: 8, color: '#4A3300' }
+      ],
+      eyeStyle: { width: 0.185, height: 0.25, pupilColor: '#170F00', highlights: true },
+      eyeOffset: { x: 0.23, y: -0.14 }
     }
   }
 };
 
-// 🌊 ОБНОВЛЕННАЯ КОЛЛЕКЦИЯ МОРСКИХ СЛАЙМОВ (КВАДРАТНЫЕ СЛАЙМЫ С ИСПРАВЛЕННОЙ ГЕОМЕТРИЕЙ)
-const FISH = {
-  fugu: {
-    name: 'Pufferfish',
-    base: '#F0C070',
-    dark: '#C08A38',
-    light: '#FBE3B0',
-    rim: '#F7DCA8',
-    glow: '#F2CE86',
-    aura: 0.42,
-    glowBlur: 34,
-    surface: 'smooth',
-    features: {
-      belly: { x: 0, y: 0.2, width: 0.65, height: 0.45, color: '#FDF0D2' },
-      spikes: [
-        { angle: -45, r: 0.07 },
-        { angle: 0, r: 0.07 },
-        { angle: 45, r: 0.07 },
-        { angle: 135, r: 0.07 },
-        { angle: 180, r: 0.07 },
-        { angle: 225, r: 0.07 }
-      ],
-      fins: [
-        { x: -0.44, y: 0, width: 0.16, height: 0.22, color: '#E8A64E' },
-        { x: 0.44, y: 0, width: 0.16, height: 0.22, color: '#E8A64E' }
-      ],
-      cheeks: [
-        { x: -0.28, y: 0.1, r: 0.08, color: '#E9925F' },
-        { x: 0.28, y: 0.1, r: 0.08, color: '#E9925F' }
-      ],
-      mouth: { type: 'smile', x: 0, y: 0.12, width: 0.14, height: 0.08, strokeColor: '#8C5A22', lineWidth: 3 },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#3A2A18', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.12 }
-    }
+// 🔥 НЕОНОВЫЙ НАБОР ФИГУРНЫХ ЭМОЦИОНАЛЬНЫХ СЛАЙМОВ
+// Полупрозрачный глянцевый гель с innerCore, чёткими бликами по углам и сочным неоновым свечением.
+// Лицо не наклеивается глифом, а рисуется вектором и вплавляется в форму тела.
+const EMOJI = {
+  heart: {
+    name: 'Heart',
+    face: '😍',
+    shape: 'heart',
+    faceStyle: 'heartEyes',
+    hue: 330,
+    base: '#FF3399',
+    dark: '#A8105C',
+    light: '#FFA3CB',
+    rim: '#FFD9E9',
+    glow: '#FF3399',
+    aura: 1,
+    glowBlur: 52,
+    surface: 'smooth'
   },
-  anglerfish: {
-    name: 'Anglerfish',
-    base: '#3E5A5E',
-    dark: '#22383B',
-    light: '#6E9296',
-    rim: '#9CC0C2',
-    glow: '#FFD98A',
-    aura: 0.6,
-    glowBlur: 46,
-    surface: 'smooth',
-    features: {
-      lure: {
-        stalkPath: [
-          { x: -0.1, y: -0.5 },
-          { x: 0.15, y: -1.05 },
-          { x: 0.72, y: -1.18 }
-        ],
-        bulb: { x: 0.78, y: -1.12, r: 0.2, color: '#FFEFC0', glowColor: '#FFD98A' }
-      },
-      fins: [
-        { x: -0.46, y: -0.15, width: 0.15, height: 0.25, color: '#33585C' }
-      ],
-      cheeks: [
-        { x: -0.28, y: 0.12, r: 0.07, color: '#2E6B70' },
-        { x: 0.28, y: 0.12, r: 0.07, color: '#2E6B70' }
-      ],
-      mouth: { type: 'wide_grin', x: 0, y: 0.14, width: 0.22, height: 0.1, strokeColor: '#14201F', lineWidth: 3 },
-      teeth: [
-        { x: -0.07, y: 0.09, width: 0.045, height: 0.075, direction: 'up' },
-        { x: 0.02, y: 0.09, width: 0.045, height: 0.075, direction: 'up' },
-        { x: -0.03, y: 0.19, width: 0.04, height: 0.06, direction: 'down' }
-      ],
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#D9A441', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.12 }
-    }
+  fire: {
+    name: 'Fire',
+    face: '🔥',
+    shape: 'flame',
+    faceStyle: 'eager',
+    hue: 26,
+    base: '#FF9426',
+    dark: '#A8480A',
+    light: '#FFC58A',
+    rim: '#FFE3BC',
+    glow: '#FF7A18',
+    aura: 1,
+    glowBlur: 54,
+    surface: 'smooth'
   },
-  octopus: {
-    name: 'Octo',
-    base: '#A96FC4',
-    dark: '#6B3A85',
-    light: '#D9B0E8',
-    rim: '#EBD3F2',
-    glow: '#C08AD8',
-    aura: 0.5,
-    glowBlur: 40,
-    surface: 'smooth',
-    features: {
-      tentacles: [
-        { x: -0.5, y: 0.42, curl: 'left_up', r: 0.11, w: 0.1, len: 0.95, suckers: true },
-        { x: -0.33, y: 0.52, curl: 'left', r: 0.12, w: 0.11, len: 1.12, suckers: true },
-        { x: -0.11, y: 0.56, curl: 'down', r: 0.12, w: 0.11, len: 1.28, suckers: true },
-        { x: 0.11, y: 0.56, curl: 'down', r: 0.12, w: 0.11, len: 1.28, suckers: true },
-        { x: 0.33, y: 0.52, curl: 'right', r: 0.12, w: 0.11, len: 1.12, suckers: true },
-        { x: 0.5, y: 0.42, curl: 'right_up', r: 0.11, w: 0.1, len: 0.95, suckers: true }
-      ],
-      headTuft: { x: 0, y: -0.58, rx: 0.12, ry: 0.08, color: '#A96FC4' },
-      spots: [
-        { x: -0.28, y: -0.32, r: 0.065, color: '#7A3F92' },
-        { x: 0.28, y: -0.28, r: 0.055, color: '#7A3F92' },
-        { x: 0.33, y: -0.12, r: 0.045, color: '#7A3F92' }
-      ],
-      cheeks: [
-        { x: -0.28, y: 0.1, r: 0.08, color: '#E08CB8' },
-        { x: 0.28, y: 0.1, r: 0.08, color: '#E08CB8' }
-      ],
-      mouth: { type: 'open_happy', x: 0, y: 0.12, width: 0.14, height: 0.1, innerColor: '#5A2A6E', tongueColor: '#E88FA8' },
-      eyeStyle: { width: 0.16, height: 0.22, pupilColor: '#2A1038', highlights: true },
-      eyeOffset: { x: 0.22, y: -0.12 }
-    }
+  devil: {
+    name: 'Devil',
+    face: '😈',
+    shape: 'devil',
+    faceStyle: 'sly',
+    hue: 338,
+    base: '#E6004C',
+    dark: '#78001F',
+    light: '#FF7BA6',
+    rim: '#FFC4D8',
+    glow: '#FF0044',
+    aura: 1,
+    glowBlur: 50,
+    surface: 'smooth'
   },
-  jellyfish: {
-    name: 'Jellyfish',
-    base: '#9FC8D8',
-    dark: '#5B8AA0',
-    light: '#E4F4F8',
-    rim: '#F2FAFC',
-    glow: '#A9E4F0',
-    aura: 0.5,
-    glowBlur: 42,
-    surface: 'smooth',
-    translucent: true,
-    features: {
-      bell: { rx: 0.68, ry: 0.56, lift: 0.14, alpha: 0.5, color: '#CFE9F2', rimColor: '#F4FBFD' },
-      frill: { y: 0.3, lobes: 7, r: 0.1, color: '#8FC0D2' },
-      oralArms: [
-        { x: -0.24, len: 1.05, w: 0.075, phase: 0.0 },
-        { x: -0.08, len: 1.2, w: 0.085, phase: 0.9 },
-        { x: 0.08, len: 1.2, w: 0.085, phase: 1.8 },
-        { x: 0.24, len: 1.05, w: 0.075, phase: 2.7 }
-      ],
-      threads: { count: 9, len: 1.45, spread: 0.46, w: 0.02, color: '#BFE2EE' },
-      spots: [
-        { x: -0.22, y: -0.18, r: 0.05, color: '#FFFFFF' },
-        { x: 0.2, y: -0.1, r: 0.04, color: '#FFFFFF' },
-        { x: -0.06, y: -0.3, r: 0.035, color: '#FFFFFF' }
-      ],
-      cheeks: [
-        { x: -0.26, y: 0.06, r: 0.07, color: '#F2B8C8' },
-        { x: 0.26, y: 0.06, r: 0.07, color: '#F2B8C8' }
-      ],
-      mouth: { type: 'tiny_smile', x: 0, y: 0.08, width: 0.11, height: 0.055, strokeColor: '#4C7386', lineWidth: 3 },
-      eyeStyle: { width: 0.15, height: 0.21, pupilColor: '#2C4A58', highlights: true },
-      eyeOffset: { x: 0.2, y: -0.14 }
-    }
+  angel: {
+    name: 'Angel',
+    face: '😇',
+    shape: 'angel',
+    faceStyle: 'happy',
+    hue: 190,
+    base: '#00E8FF',
+    dark: '#00728F',
+    light: '#A6F2FF',
+    rim: '#E2FBFF',
+    glow: '#00E8FF',
+    aura: 1,
+    glowBlur: 56,
+    surface: 'smooth'
   },
-  starfish: {
-    name: 'Starfish',
-    base: '#E08A62',
-    dark: '#A85A3C',
-    light: '#F6C4A4',
-    rim: '#FBD9BE',
-    glow: '#F0A87E',
-    aura: 0.36,
-    glowBlur: 30,
-    surface: 'smooth',
-    features: {
-      rays: { count: 5, length: 1.62, width: 0.26, tip: 0.08, sway: 0.85, color: '#C9704A', edge: '#EFA98A' },
-      tubercles: [
-        { x: -0.3, y: -0.24, r: 0.05, color: '#FBD9BE' },
-        { x: 0.3, y: -0.2, r: 0.045, color: '#FBD9BE' },
-        { x: 0.26, y: 0.24, r: 0.04, color: '#FBD9BE' },
-        { x: -0.26, y: 0.26, r: 0.05, color: '#FBD9BE' },
-        { x: 0, y: -0.34, r: 0.035, color: '#FBD9BE' }
-      ],
-      cheeks: [
-        { x: -0.3, y: 0.04, r: 0.07, color: '#E88A6E' },
-        { x: 0.3, y: 0.04, r: 0.07, color: '#E88A6E' }
-      ],
-      mouth: { type: 'tiny_smile', x: 0, y: 0.1, width: 0.12, height: 0.06, strokeColor: '#8A4526', lineWidth: 3 },
-      eyeStyle: { width: 0.15, height: 0.2, pupilColor: '#3A1E12', highlights: true },
-      eyeOffset: { x: 0.16, y: -0.1 }
-    }
-  },
-  seahorse: {
-    name: 'Seahorse',
-    base: '#E0B872',
-    dark: '#A8823F',
-    light: '#F6E0AC',
-    rim: '#FBEFCB',
-    glow: '#E8CB8E',
-    aura: 0.38,
-    glowBlur: 32,
-    surface: 'smooth',
-    features: {
-      snout: { x: 0.22, y: -0.36, len: 1.15, w: 0.075, color: '#C89A4E' },
-      coronet: { x: 0.3, y: -0.95, r: 0.09, color: '#C89A4E' },
-      curl: { cx: -0.02, cy: 0.98, r: 0.44, turns: 1.15, w: 0.06, color: '#C89A4E' },
-      dorsalFin: { x: -0.6, y: 0.02, w: 0.5, h: 0.34, color: '#EFCB86' },
-      ridges: [
-        { x: 0.02, y: -0.18, r: 0.038, color: '#C89A4E' },
-        { x: -0.04, y: 0.06, r: 0.034, color: '#C89A4E' },
-        { x: 0.0, y: 0.3, r: 0.032, color: '#C89A4E' }
-      ],
-      cheeks: [
-        { x: -0.22, y: 0.08, r: 0.07, color: '#E89A86' },
-        { x: 0.1, y: 0.14, r: 0.06, color: '#E89A86' }
-      ],
-      mouth: { type: 'tiny_smile', x: 0.16, y: -0.14, width: 0.1, height: 0.05, strokeColor: '#8A6A2E', lineWidth: 3 },
-      eyeStyle: { width: 0.15, height: 0.2, pupilColor: '#2E2210', highlights: true },
-      eyeOffset: { x: 0.12, y: -0.22 }
-    }
+  surprised: {
+    name: 'Surprised',
+    face: '😮',
+    shape: 'surprised',
+    faceStyle: 'wow',
+    hue: 48,
+    base: '#FFCC00',
+    dark: '#96700A',
+    light: '#FFE79A',
+    rim: '#FFF6D4',
+    glow: '#FFCC00',
+    aura: 0.95,
+    glowBlur: 50,
+    surface: 'smooth'
   }
 };
 
@@ -509,7 +466,7 @@ function buildVisuals(level, noPlanet) {
     baseHue,
     legendary,
     iridescent,
-    golden: !!(theme && theme.golden),
+    golden: !!(planet ? planet.golden : theme && theme.golden),
     aura: planet ? (planet.aura || 0) : (theme && theme.aura) || (iridescent ? 1 : 0),
     visualStyle,
     particleType,
@@ -594,17 +551,18 @@ function buildAnimalVisuals(level, key) {
 
 const THEMED_CONFIGS = new Map();
 
-function buildFishVisuals(level, key) {
-  const f = FISH[key];
+function buildEmojiVisuals(level, key) {
+  const e = EMOJI[key];
   return {
-    color: f.base,
-    glowColor: f.glow,
-    glowBlur: f.glowBlur,
-    darkColor: f.dark,
-    lightColor: f.light,
-    rimColor: f.rim,
-    aura: f.aura,
-    visualStyle: 'ocean',
+    color: e.base,
+    glowColor: e.glow,
+    glowBlur: e.glowBlur,
+    darkColor: e.dark,
+    lightColor: e.light,
+    rimColor: e.rim,
+    baseHue: e.hue,
+    aura: e.aura,
+    visualStyle: 'emoji',
     particleType: null,
     innerCore: true,
     legendary: false,
@@ -614,14 +572,18 @@ function buildFishVisuals(level, key) {
     planet: null,
     isPlanet: false, // Гарантирует, что объект не будет рендериться как круглый планетарный элемент
     isAnimal: false,
-    isFish: true,
-    translucent: !!f.translucent,
-    surface: f.surface,
+    isFish: false,
+    isEmoji: true,
+    translucent: false,
+    surface: e.surface,
     ring: false,
-    palette: f,
-    features: f.features || null,
-    name: f.name,
-    fish: key
+    palette: e,
+    features: null,
+    name: e.name,
+    emoji: e.face,
+    emojiKey: key,
+    shape: e.shape,
+    faceStyle: e.faceStyle
   };
 }
 
@@ -632,12 +594,12 @@ function themedConfig(level, themeId) {
 
   const base = level <= BASE_CONFIGS.length ? { ...BASE_CONFIGS[level - 1] } : makeConfig(level);
   const animalKey = themeId === 'animals' ? COLLECTIONS.animals.levels[level] : null;
-  const fishKey = themeId === 'ocean' ? COLLECTIONS.ocean.levels[level] : null;
+  const emojiKey = themeId === 'ocean' ? COLLECTIONS.ocean.levels[level] : null;
 
   if (animalKey) {
     cfg = { ...base, ...buildAnimalVisuals(level, animalKey) };
-  } else if (fishKey) {
-    cfg = { ...base, ...buildFishVisuals(level, fishKey) };
+  } else if (emojiKey) {
+    cfg = { ...base, ...buildEmojiVisuals(level, emojiKey) };
   } else if (themeId === 'animals' || themeId === 'ocean') {
     cfg = { ...base, ...buildVisuals(level, true) };
   } else {

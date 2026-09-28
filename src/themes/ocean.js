@@ -1,6 +1,6 @@
 export default {
   id: 'ocean',
-  title: 'Ocean',
+  title: 'Emoji',
   accent: '#45ccff',
   playable: false
 };
