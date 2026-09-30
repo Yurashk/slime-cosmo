@@ -173,6 +173,12 @@ body::before {
   animation: glow-pulse 1.5s ease-in-out infinite;
 }
 
+/* Пауза между бросками: превью приглушено — тап запомнен, слайм вот-вот упадёт */
+.preview-slime.cooling {
+  animation: none;
+  opacity: 0.35;
+}
+
 .preview-slime.hidden {
   opacity: 0;
   visibility: hidden;
@@ -267,8 +273,8 @@ body::before {
 
 .restart-btn {
   pointer-events: auto;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -480,6 +486,9 @@ body::before {
 }
 
 .game-over-overlay {
+  /* Акцент мира подставляется из JS: фиолетовый — космос, зелёный — звери, голубой — эмодзи */
+  --go-accent: #00e8ff;
+  --go-accent-rgb: 0, 232, 255;
   background: rgba(10, 10, 26, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -488,18 +497,20 @@ body::before {
 .game-over-card {
   position: relative;
   width: min(92vw, 380px);
-  padding: 30px 24px 28px;
-  background: rgba(18, 22, 41, 0.85);
+  padding: 22px 24px 24px;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(var(--go-accent-rgb), 0.16), transparent 60%),
+    rgba(18, 22, 41, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 232, 255, 0.4);
+  border: 1px solid rgba(var(--go-accent-rgb), 0.45);
   border-radius: 28px;
   box-shadow:
-    0 0 30px rgba(0, 232, 255, 0.2),
-    0 0 80px rgba(0, 232, 255, 0.1),
+    0 0 30px rgba(var(--go-accent-rgb), 0.22),
+    0 0 80px rgba(var(--go-accent-rgb), 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   text-align: center;
-  animation: slide-up 0.4s ease-out;
+  animation: go-card-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
 }
 
 .game-over-card > * {
@@ -508,11 +519,11 @@ body::before {
 }
 
 .game-over-title {
-  font-size: clamp(30px, 6vw, 42px);
+  font-size: clamp(26px, 5.4vw, 36px);
   font-weight: 900;
   letter-spacing: 0.16em;
-  margin-bottom: 8px;
-  background: linear-gradient(90deg, var(--neon-cyan), #a43bff, var(--neon-pink));
+  margin-bottom: 0;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--go-accent), var(--neon-pink));
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -536,7 +547,10 @@ body::before {
   background-clip: padding-box;
   border-radius: 999px;
   box-shadow: 0 0 18px rgba(255, 60, 200, 0.55), 0 0 30px rgba(0, 230, 255, 0.4);
-  animation: glow-pulse 1.4s ease-in-out infinite;
+  /* Значок выпрыгивает, когда досчитался счёт, потом мягко пульсирует */
+  animation:
+    go-badge-pop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.5) 1.35s both,
+    glow-pulse 1.4s ease-in-out 1.9s infinite;
 }
 
 .final-score-container {
@@ -556,9 +570,10 @@ body::before {
   font-size: clamp(36px, 7.5vw, 50px);
   font-weight: 900;
   font-family: 'Courier New', monospace;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 16px rgba(0, 232, 255, 0.75), 0 0 44px rgba(0, 232, 255, 0.4);
+  color: #f2fdff;
+  text-shadow: 0 0 16px rgba(var(--go-accent-rgb), 0.85), 0 0 44px rgba(var(--go-accent-rgb), 0.45);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .stats-grid {
@@ -569,20 +584,59 @@ body::before {
 }
 
 .stat-box {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 3px;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 12px 8px 10px;
+  padding: 10px 12px;
   border-radius: 16px;
   background: rgba(10, 14, 29, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  text-align: left;
+  animation: go-rise 0.45s ease-out both;
+}
+
+/* Плитки появляются по очереди, пока набегает счёт */
+.stat-box:nth-child(1) { animation-delay: 0.45s; }
+.stat-box:nth-child(2) { animation-delay: 0.55s; }
+.stat-box:nth-child(3) { animation-delay: 0.65s; }
+.stat-box:nth-child(4) { animation-delay: 0.75s; }
+
+.stat-icon {
+  grid-row: 1 / span 2;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--go-accent);
+  background: rgba(var(--go-accent-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--go-accent-rgb), 0.25);
+}
+
+.stat-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Рекорд побит — плитка «Best» подсвечена */
+.stat-box.record {
+  border-color: rgba(255, 90, 200, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 16px rgba(255, 60, 200, 0.28);
+}
+
+.stat-box.record .stat-icon {
+  color: #ff7ad0;
+  background: rgba(255, 60, 200, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 90, 200, 0.35);
 }
 
 .stat-label {
-  font-size: clamp(6px, 1.1vw, 8px);
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -602,32 +656,50 @@ body::before {
   white-space: nowrap;
 }
 
-.biggest-slime-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 12px 20px;
-  margin: 2px 0 18px;
-  border-radius: 20px;
-  background: rgba(10, 14, 29, 0.45);
-  border: 1px solid rgba(120, 240, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+/* ── Герой экрана: самый большой слайм партии, живой, с лучами за спиной ── */
+.go-hero {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  margin: 2px auto 0;
+  animation: go-hero-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.4) 0.15s both;
 }
 
-.biggest-slime-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  flex: none;
+.go-hero-rays {
+  position: absolute;
+  inset: -34px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg,
+    rgba(var(--go-accent-rgb), 0.3) 0deg 9deg,
+    transparent 9deg 30deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%);
+  mask: radial-gradient(circle, #000 18%, transparent 68%);
+  animation: go-spin 14s linear infinite;
+  pointer-events: none;
 }
 
-.biggest-slime-info {
+.go-hero-glow {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--go-accent-rgb), 0.45), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.go-hero-slime {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.go-hero-caption {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
-  text-align: left;
+  margin: 0 0 12px;
+  animation: go-rise 0.45s ease-out 0.35s both;
 }
 
 .biggest-slime-title {
@@ -639,14 +711,16 @@ body::before {
 }
 
 .biggest-slime-name {
-  font-size: clamp(14px, 2.6vw, 18px);
+  font-size: clamp(16px, 3vw, 20px);
   font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #e2f7ff;
-  text-shadow: 0 0 12px rgba(120, 240, 255, 0.5);
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(var(--go-accent-rgb), 0.8);
 }
 
 .btn-play-again {
+  position: relative;
+  overflow: hidden;
   display: block;
   width: 100%;
   padding: 14px 24px;
@@ -655,18 +729,33 @@ body::before {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: #fff;
-  background: #00aaff;
-  border: 1px solid rgba(120, 240, 255, 0.4);
+  background: linear-gradient(100deg, #00E8FF 0%, #1B7BFF 55%, #2B3BE0 100%);
+  border: 1px solid rgba(120, 240, 255, 0.55);
   border-radius: 999px;
   cursor: pointer;
   box-shadow:
     0 0 14px rgba(0, 170, 255, 0.55),
     0 0 40px rgba(0, 170, 255, 0.3);
   transition: all 0.2s ease;
+  animation: go-rise 0.45s ease-out 0.95s both;
+}
+
+/* Блик пробегает по кнопке — взгляд сам тянется к «сыграть ещё» */
+.btn-play-again::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+  animation: go-shine 2.8s ease-in-out 1.6s infinite;
+  pointer-events: none;
 }
 
 .btn-play-again:hover {
-  background: #26b8ff;
+  filter: brightness(1.1);
   transform: translateY(-1px);
   box-shadow:
     0 0 24px rgba(0, 170, 255, 0.85),
@@ -708,19 +797,117 @@ body::before {
   transform: translateY(0px) scale(0.97);
 }
 
-.final-collection {
-  font-size: clamp(10px, 1.8vw, 13px);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(200, 220, 255, 0.72);
-  margin-bottom: 20px;
+/* ── Лента коллекции: открытые в цвете, следующий к открытию пульсирует ── */
+.go-collection {
+  margin: 0 0 16px;
+  padding: 10px 12px 8px;
+  border-radius: 18px;
+  background: rgba(10, 14, 29, 0.5);
+  border: 1px solid rgba(var(--go-accent-rgb), 0.22);
+  animation: go-rise 0.45s ease-out 0.85s both;
 }
 
-.final-collection span {
-  color: #7ff2ff;
-  font-weight: 700;
+.go-collection-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.go-collection-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(185, 212, 255, 0.62);
+}
+
+.go-collection-count {
   font-family: 'Courier New', monospace;
-  text-shadow: 0 0 10px rgba(120, 240, 255, 0.5);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--go-accent);
+  text-shadow: 0 0 10px rgba(var(--go-accent-rgb), 0.5);
+}
+
+.go-collection-strip-wrap {
+  position: relative;
+}
+
+.go-collection-strip {
+  display: block;
+  width: 100%;
+  height: 46px;
+}
+
+.go-collection-next {
+  position: absolute;
+  top: 50%;
+  border-radius: 50%;
+  border: 2px solid var(--go-accent);
+  box-shadow: 0 0 12px rgba(var(--go-accent-rgb), 0.8);
+  transform: translate(-50%, -50%);
+  animation: go-ring 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.go-collection-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(215, 230, 255, 0.78);
+}
+
+.go-confetti {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 28px;
+}
+
+@keyframes go-card-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes go-hero-in {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes go-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes go-badge-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes go-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes go-shine {
+  0% { left: -40%; }
+  45%, 100% { left: 130%; }
+}
+
+@keyframes go-ring {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.92); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-over-card,
+  .game-over-card *,
+  .game-over-card *::after {
+    animation: none !important;
+  }
 }
 
 .neon-btn {
@@ -778,15 +965,6 @@ body::before {
     gap: 8px;
     margin-bottom: 12px;
   }
-  .biggest-slime-card {
-    margin: 0 0 12px;
-    padding: 8px 16px;
-    gap: 12px;
-  }
-  .biggest-slime-avatar {
-    width: 40px;
-    height: 40px;
-  }
   .final-score-container {
     margin-bottom: 12px;
   }
@@ -815,9 +993,9 @@ body::before {
     padding: 5px 10px 6px;
   }
   .restart-btn {
-    width: 30px;
-    height: 30px;
-    font-size: 14px;
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
   }
   .next-slime-hud {
     gap: 4px;
@@ -1721,6 +1899,12 @@ body::before {
 }
 
 .start-play {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   min-width: min(70vw, 290px);
   padding: 15px 40px;
   pointer-events: auto;
@@ -1749,7 +1933,66 @@ body::before {
 }
 
 .start-play:active {
-  transform: translateY(0);
+  transform: translateY(1px) scale(0.97);
+}
+
+/* Дыхание свечения — кнопка зовёт нажать, но не мельтешит */
+.start-play:not(.locked) {
+  animation: start-play-breathe 2.4s ease-in-out infinite;
+}
+
+/* Блик пробегает по кнопке */
+.start-play::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 28%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-18deg);
+  animation: go-shine 3.2s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+
+.start-play-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+}
+
+.start-play span {
+  /* компенсируем letter-spacing последней буквы, чтобы текст стоял по центру с иконкой */
+  margin-right: -0.24em;
+}
+
+.start-play.locked {
+  color: rgba(215, 225, 255, 0.8);
+  background: linear-gradient(160deg, rgba(60, 68, 110, 0.75), rgba(22, 26, 52, 0.85));
+  border-color: rgba(170, 185, 230, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 12px rgba(120, 140, 220, 0.2);
+  text-shadow: none;
+}
+
+.start-play.locked::after {
+  display: none;
+}
+
+@keyframes start-play-breathe {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(0, 232, 255, 0.45), 0 0 34px rgba(40, 90, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(0, 232, 255, 0.75), 0 0 56px rgba(40, 90, 255, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-play,
+  .start-play::after {
+    animation: none !important;
+  }
 }
 
 .start-play.disabled {
@@ -1823,4 +2066,115 @@ body::before {
     0 0 24px rgba(255, 60, 200, 0.72),
     0 0 60px rgba(255, 40, 180, 0.34),
     0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Режим чёрной дыры: подпись и кнопка отмены над чашей ── */
+.bh-banner {
+  position: absolute;
+  z-index: 12;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  text-align: center;
+  animation: fade-in 0.2s ease-out;
+}
+
+.bh-banner-title {
+  font-family: 'Orbitron', 'Montserrat', sans-serif;
+  font-size: clamp(13px, 3.2vw, 16px);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: #e6c8ff;
+  text-shadow: 0 0 12px rgba(190, 110, 255, 0.9);
+}
+
+.bh-banner-hint {
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(11px, 2.6vw, 13px);
+  font-weight: 700;
+  color: rgba(225, 205, 255, 0.85);
+}
+
+.bh-cancel {
+  pointer-events: auto;
+  margin-top: 4px;
+  min-height: 36px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-family: 'Orbitron', 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #f3e8ff;
+  background: linear-gradient(160deg, rgba(60, 30, 96, 0.85), rgba(20, 10, 40, 0.9));
+  border: 1px solid rgba(200, 140, 255, 0.55);
+  box-shadow: 0 0 12px rgba(180, 100, 255, 0.35);
+  cursor: pointer;
+}
+
+/* ── Подсказка у бустера: работает и на тач-экранах, где нет hover ── */
+.booster-toast {
+  position: absolute;
+  z-index: 13;
+  max-width: min(62vw, 240px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #eaf6ff;
+  background: rgba(10, 12, 32, 0.94);
+  border: 1px solid rgba(190, 130, 255, 0.5);
+  box-shadow: 0 0 16px rgba(170, 100, 255, 0.3), 0 6px 18px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Только что открытый бустер пульсирует, пока его не нажмут */
+.booster-btn.fresh {
+  animation: booster-fresh 1.2s ease-in-out infinite;
+}
+
+@keyframes booster-fresh {
+  0%, 100% { box-shadow: 0 0 10px rgba(190, 110, 255, 0.5); transform: scale(1); }
+  50% { box-shadow: 0 0 26px rgba(210, 140, 255, 0.95); transform: scale(1.08); }
+}
+
+
+/* ── Экран проигрыша: страховка и компактный режим для невысоких экранов ── */
+.game-over-card {
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.game-over-card::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-height: 700px) {
+  .game-over-card { padding: 14px 18px 16px; }
+  .game-over-title { font-size: 24px; }
+  .go-hero, .go-hero-slime { width: 72px; height: 72px; }
+  .go-hero-rays { inset: -20px; }
+  .go-hero-caption { margin-bottom: 6px; }
+  .go-hero-caption .biggest-slime-title { display: none; }
+  .biggest-slime-name { font-size: 16px; }
+  .new-record-badge { margin-bottom: 8px; padding: 4px 14px; }
+  .final-score-label { margin-bottom: 0; }
+  .final-score-value { font-size: 34px; }
+  .final-score-container { margin-bottom: 10px; }
+  .stats-grid { gap: 8px; margin-bottom: 10px; }
+  .stat-box { padding: 7px 10px; column-gap: 8px; }
+  .stat-icon { width: 26px; height: 26px; }
+  .stat-icon svg { width: 15px; height: 15px; }
+  .go-collection { margin-bottom: 10px; padding: 8px 10px 6px; }
+  .go-collection-hint { display: none; }
+  .btn-play-again { padding: 11px 24px; }
+  .btn-back-to-menu { margin-top: 8px; padding: 8px 24px; }
 }

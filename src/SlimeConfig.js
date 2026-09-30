@@ -78,6 +78,8 @@ const PLANET_BANDS = {
   saturn: ['#e8d7a0', '#cbb67a', '#e2ce93', '#bfa76a', '#d6c088']
 };
 
+// sway: { amp, speed, phase?, mirror? } на ушах, крыльях, усиках, перьях и жале —
+// деталь покачивается на amp градусов; левая/правая зеркалятся, если mirror !== false.
 const ANIMALS = {
   turtle: {
     name: 'Froggy',
@@ -134,16 +136,20 @@ const ANIMALS = {
     surface: 'smooth',
     features: {
       mane: { color: '#FFD79E', count: 20, radiusOffset: -0.12, length: 0.1, width: 0.075, alpha: 0.9 },
+      ears: [
+        { x: -0.3, y: -0.33, r: 0.09, color: '#F09029', innerColor: '#FFCFA0', edgeColor: '#A85600', edgeAlpha: 0.5 },
+        { x: 0.3, y: -0.33, r: 0.09, color: '#F09029', innerColor: '#FFCFA0', edgeColor: '#A85600', edgeAlpha: 0.5 }
+      ],
       belly: { x: 0, y: 0.27, width: 0.54, height: 0.3, color: '#FFDCA8', edgeColor: '#A85600', edgeAlpha: 0.45 },
       snout: {
         x: 0, y: 0.14, width: 0.5, height: 0.36, color: '#FFE6C4', edgeColor: '#A85600', edgeAlpha: 0.5,
-        muzzleColor: '#FFF8EC', muzzleAlpha: 0.75, noseColor: '#331600', noseSize: 0.088
+        muzzleColor: '#FFF8EC', muzzleAlpha: 0.75, noseColor: '#331600', noseSize: 0.052
       },
       cheeks: [
         { x: -0.35, y: 0.09, r: 0.095, color: '#FF8585', alpha: 0.5 },
         { x: 0.35, y: 0.09, r: 0.095, color: '#FF8585', alpha: 0.5 }
       ],
-      mouth: { type: 'bear_snout', x: 0, y: 0.22, strokeColor: '#331600' },
+      mouth: { type: 'w_mouth', x: 0, y: 0.215, width: 0.15, height: 0.055, strokeColor: '#331600', lineWidth: 2.4 },
       feet: [
         { x: -0.19, y: 0.325, rx: 0.105, ry: 0.068, angle: -12, color: '#F09029', edgeColor: '#A85600', edgeAlpha: 0.45, toes: 3, toeColor: '#8A4300' },
         { x: 0.19, y: 0.325, rx: 0.105, ry: 0.068, angle: 12, color: '#F09029', edgeColor: '#A85600', edgeAlpha: 0.45, toes: 3, toeColor: '#8A4300' }
@@ -165,13 +171,13 @@ const ANIMALS = {
     features: {
       belly: { x: 0, y: 0.23, width: 0.56, height: 0.36, color: '#FFFBE8', edgeColor: '#B8860B', edgeAlpha: 0.45 },
       crest: [
-        { x: -0.08, y: -0.32, angle: -26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928' },
-        { x: 0, y: -0.35, angle: 0, length: 0.14, width: 0.05, color: '#F59300', tipColor: '#FFD84A' },
-        { x: 0.08, y: -0.32, angle: 26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928' }
+        { x: -0.08, y: -0.32, angle: -26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928', sway: { amp: 7, speed: 0.005, mirror: false } },
+        { x: 0, y: -0.35, angle: 0, length: 0.14, width: 0.05, color: '#F59300', tipColor: '#FFD84A', sway: { amp: 7, speed: 0.005, mirror: false } },
+        { x: 0.08, y: -0.32, angle: 26, length: 0.11, width: 0.045, color: '#F07C00', tipColor: '#FFC928', sway: { amp: 7, speed: 0.005, mirror: false } }
       ],
       wings: [
-        { x: -0.33, y: 0.03, rx: 0.115, ry: 0.185, angle: -20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34 },
-        { x: 0.33, y: 0.03, rx: 0.115, ry: 0.185, angle: 20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34 }
+        { x: -0.33, y: 0.1, rx: 0.11, ry: 0.165, angle: -20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34, sway: { amp: 9, speed: 0.009 } },
+        { x: 0.33, y: 0.1, rx: 0.11, ry: 0.165, angle: 20, color: '#F5A800', rimColor: '#A97400', rimAlpha: 0.5, veins: 2, veinColor: '#A97400', veinAlpha: 0.34, sway: { amp: 9, speed: 0.009 } }
       ],
       beak: { x: 0, y: 0.08, width: 0.22, height: 0.15, color: '#FF8A00', tipColor: '#C24A00' },
       nostrils: [
@@ -204,8 +210,8 @@ const ANIMALS = {
       belly: { x: 0, y: 0.26, width: 0.54, height: 0.32, color: '#FFDDE9', edgeColor: '#C7386B', edgeAlpha: 0.45 },
       earEdge: '#B32C5C',
       ears: [
-        { x: -0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0' },
-        { x: 0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0' }
+        { x: -0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0', sway: { amp: 6, speed: 0.004 } },
+        { x: 0.25, y: -0.28, rx: 0.08, ry: 0.13, color: '#FF94B9', innerColor: '#FF6FA0', sway: { amp: 6, speed: 0.004 } }
       ],
       snout: {
         x: 0, y: 0.09, width: 0.34, height: 0.25, color: '#FFF4F8', edgeColor: '#C7386B', edgeAlpha: 0.45,
@@ -250,17 +256,17 @@ const ANIMALS = {
     features: {
       belly: { x: 0, y: 0.23, width: 0.56, height: 0.36, color: '#FFFFFF', edgeColor: '#0E7FA8', edgeAlpha: 0.4 },
       crest: [
-        { x: -0.07, y: -0.32, angle: -30, length: 0.12, width: 0.045, color: '#25BBD9', tipColor: '#B2F4FF' },
-        { x: 0.01, y: -0.35, angle: -4, length: 0.145, width: 0.05, color: '#37CDF0', tipColor: '#B2F4FF' }
+        { x: -0.07, y: -0.32, angle: -30, length: 0.12, width: 0.045, color: '#25BBD9', tipColor: '#B2F4FF', sway: { amp: 8, speed: 0.006, mirror: false } },
+        { x: 0.01, y: -0.35, angle: -4, length: 0.145, width: 0.05, color: '#37CDF0', tipColor: '#B2F4FF', sway: { amp: 8, speed: 0.006, phase: 0.6, mirror: false } }
       ],
       wings: [
-        { x: -0.33, y: 0.04, rx: 0.115, ry: 0.185, angle: -20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32 },
-        { x: 0.33, y: 0.04, rx: 0.115, ry: 0.185, angle: 20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32 }
+        { x: -0.33, y: 0.12, rx: 0.11, ry: 0.16, angle: -20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32, sway: { amp: 12, speed: 0.011 } },
+        { x: 0.33, y: 0.12, rx: 0.11, ry: 0.16, angle: 20, color: '#25BBD9', rimColor: '#0E7FA8', rimAlpha: 0.45, veins: 2, veinColor: '#0E7FA8', veinAlpha: 0.32, sway: { amp: 12, speed: 0.011 } }
       ],
       tailFeathers: [
-        { x: -0.02, y: 0.3, angle: 212, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF' },
-        { x: 0.02, y: 0.33, angle: 180, length: 0.16, width: 0.055, color: '#37CDF0', tipColor: '#B2F4FF' },
-        { x: 0.02, y: 0.3, angle: 148, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF' }
+        { x: -0.02, y: 0.3, angle: 212, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF', sway: { amp: 6, speed: 0.007, mirror: false } },
+        { x: 0.02, y: 0.33, angle: 180, length: 0.16, width: 0.055, color: '#37CDF0', tipColor: '#B2F4FF', sway: { amp: 6, speed: 0.007, phase: 0.5, mirror: false } },
+        { x: 0.02, y: 0.3, angle: 148, length: 0.13, width: 0.05, color: '#25BBD9', tipColor: '#B2F4FF', sway: { amp: 6, speed: 0.007, phase: 1, mirror: false } }
       ],
       beak: { x: 0, y: 0.07, width: 0.3, height: 0.2, color: '#FF8A00', tipColor: '#C24A00' },
       nostrils: [
@@ -291,23 +297,23 @@ const ANIMALS = {
     surface: 'smooth',
     features: {
       antenna: [
-        { x: -0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045 },
-        { x: 0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045 }
+        { x: -0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045, sway: { amp: 10, speed: 0.006 } },
+        { x: 0.15, y: -0.31, rx: 0.032, ry: 0.11, color: '#332300', ballR: 0.045, sway: { amp: 10, speed: 0.006 } }
       ],
       stripes: [
-        { y: 0.06, height: 0.11, color: '#332300' },
-        { y: 0.28, height: 0.11, color: '#332300' }
+        { y: 0.22, height: 0.08, color: '#332300' },
+        { y: 0.38, height: 0.08, color: '#332300' }
       ],
       wings: [
-        { x: -0.33, y: -0.07, rx: 0.105, ry: 0.175, angle: -27, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3 },
-        { x: 0.33, y: -0.07, rx: 0.105, ry: 0.175, angle: 27, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3 }
+        { x: -0.37, y: -0.34, rx: 0.07, ry: 0.11, angle: -50, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3, sway: { amp: 7, speed: 0.06 } },
+        { x: 0.37, y: -0.34, rx: 0.07, ry: 0.11, angle: 50, color: 'rgba(255, 255, 255, 0.66)', rimColor: '#7EEAFF', rimAlpha: 0.35, veins: 2, veinColor: '#5CC6E0', veinAlpha: 0.3, sway: { amp: 7, speed: 0.06 } }
       ],
-      stinger: { x: 0, y: 0.36, angle: 96, length: 0.115, width: 0.07, color: '#332300' },
+      stinger: { x: 0, y: 0.36, angle: 96, length: 0.115, width: 0.07, color: '#332300', sway: { amp: 8, speed: 0.005, mirror: false } },
       cheeks: [
         { x: -0.31, y: 0.13, r: 0.095, color: '#FF7D7D', alpha: 0.55 },
         { x: 0.31, y: 0.13, r: 0.095, color: '#FF7D7D', alpha: 0.55 }
       ],
-      mouth: { type: 'open_smile', x: 0, y: 0.12, width: 0.2, height: 0.11, strokeColor: '#332300', tongueColor: '#FF8FA8' },
+      mouth: { type: 'open_smile', x: 0, y: 0.06, width: 0.16, height: 0.08, strokeColor: '#332300', tongueColor: '#FF8FA8' },
       feet: [
         { x: -0.13, y: 0.35, rx: 0.062, ry: 0.04, angle: -8, color: '#4A3300' },
         { x: 0.13, y: 0.35, rx: 0.062, ry: 0.04, angle: 8, color: '#4A3300' }

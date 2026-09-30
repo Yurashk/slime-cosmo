@@ -17,6 +17,7 @@ import { createGameOverBg } from './gameOverBg.js';
 import { startLeaderboard, reportScore, leaderboardGameOver, leaderboardRestart } from './leaderboard.js';
 import { sfx } from './audio.js';
 import { progress } from './state.js';
+import { quality, GLOW_SCALE } from './quality.js';
 import { THEMES, loadTheme, entityIdOf, THEME_BASE_FROM, bowlStyle } from './themes/registry.js';
 import { createStartScreen } from './startScreen.js';
 
@@ -54,6 +55,14 @@ const finalCollectionEl = document.getElementById('final-collection');
 const newRecordEl = document.getElementById('new-record');
 const goCanvas = document.getElementById('go-canvas');
 const goFrame = document.querySelector('#game-over-overlay .game-over-card');
+const goConfettiCanvas = document.getElementById('go-confetti');
+const goStripCanvas = document.getElementById('go-collection-strip');
+const goNextRingEl = document.getElementById('go-collection-next');
+const goHintEl = document.getElementById('go-collection-hint');
+const statBestEl = document.getElementById('stat-best');
+// Что уже было открыто в коллекции на старте партии — чтобы на экране проигрыша отметить новые
+let runStartCollectionMax = 0;
+let goAnimRaf = 0;
 const startScreenEl = document.getElementById('start-screen');
 const startCanvas = document.getElementById('start-canvas');
 const startTooltipEl = document.getElementById('start-tooltip');
@@ -78,6 +87,8 @@ let isGameOver = false;
 let gameLoopRaf = 0;
 let lastDropTime = 0;
 let lastFrameTime = 0;
+// На Game Over сцена под размытым оверлеем не меняется — после одного кадра её не перерисовываем
+let sceneFrozen = false;
 const DROP_COOLDOWN = 700;
 let mouseX = 0;
 let canvasRect = null;
@@ -109,7 +120,6 @@ let totalDrops = 0;
 let gameStartTime = 0;
 let gameEndTime = 0;
 let isNewRecord = false;
-const PLANET_TOTAL = 9;
 const COLLECTION_GAP = 6;
 const COLLECTION_ARC = 0.24;
 
@@ -134,6 +144,23 @@ const bhConfirmCanvas = document.getElementById('bh-confirm-canvas');
 const bhConfirmName = document.getElementById('bh-confirm-name');
 const bhConfirmYesBtn = document.getElementById('bh-confirm-yes');
 const bhConfirmNoBtn = document.getElementById('bh-confirm-no');
+const bhBanner = document.getElementById('bh-banner');
+const bhBannerHint = document.getElementById('bh-banner-hint');
+const bhCancelBtn = document.getElementById('bh-cancel');
+const boosterToast = document.getElementById('booster-toast');
+const confirmOverlay = document.getElementById('confirm-overlay');
+const confirmTitleEl = document.getElementById('confirm-title');
+const confirmTextEl = document.getElementById('confirm-text');
+const confirmYesBtn = document.getElementById('confirm-yes');
+const confirmNoBtn = document.getElementById('confirm-no');
+let confirmAction = null;
+let boosterToastTimer = 0;
+// На тач-экране тап выбирает слайм прямо под пальцем; смещение прицела вверх
+// включается, только если палец повели — тогда цель не прячется под ним
+const BH_DRAG_THRESHOLD = 14;
+let bhTouchStart = null;
+let bhDragAim = false;
+let pendingDrop = false;
 let boosterCharges = { blackhole: 1 };
 let boostersUnlocked = {};
 let bhMode = false;
@@ -373,8 +400,9 @@ function drawLockedSlot(g, level, x, y, r, themeId) {
   const col = pal ? pal.base : 'rgba(150, 170, 210, 0.55)';
   const chamfer = squircle ? Math.max(1.5, Math.min(8, r * 0.35)) : 0;
   g.beginPath();
+  // Форма заливки совпадает с обводкой: у зверей скруглённый квадрат, у планет и эмодзи — круг
   if (squircle && g.roundRect) g.roundRect(-r, -r, r * 2, r * 2, chamfer);
-  else g.rect(-r, -r, r * 2, r * 2);
+  else g.arc(0, 0, r, 0, Math.PI * 2);
   if (pal) {
     const grad = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r);
     grad.addColorStop(0, pal.light || col);
@@ -443,7 +471,7 @@ function drawPanelSlime(g, slot, now, glowScale = 1) {
   if (cfg.isAnimal && cfg.palette) {
     const animal = getPanelSlime(slot.level);
     animal.body.angle = 0;
-    drawPanelAnimal(g, animal, cfg, r, revealAlpha);
+    drawPanelAnimal(g, animal, cfg, r, revealAlpha, now);
   } else if (cfg.isEmoji) {
     drawPanelEmojiSlime(g, cfg, r, now, revealAlpha);
   } else if (cfg.isPlanet && cfg.palette) {
@@ -542,8 +570,10 @@ function emojiBodyPath(ctx, shape, r) {
   ctx.arc(0, 0, r, 0, Math.PI * 2);
 }
 
-// Детали, которые сидят за телом: рожки, хвост, крылья
-function emojiBehindDetails(ctx, shape, r, p, alpha) {
+// Детали, которые сидят за телом: рожки, хвост, крылья.
+// Все они слегка живут во времени: пламя дрожит, хвост виляет, сердечко бьётся.
+function emojiBehindDetails(ctx, shape, r, p, alpha, now = 0, seed = 0) {
+  const t = now * 0.001 + seed;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.lineJoin = 'round';
@@ -560,7 +590,11 @@ function emojiBehindDetails(ctx, shape, r, p, alpha) {
       ctx.closePath();
       ctx.fill();
     }
-    // Хвостик
+    // Хвостик — ленивое виляние вокруг основания
+    ctx.save();
+    ctx.translate(r * 0.72, r * 0.5);
+    ctx.rotate(now ? Math.sin(t * 3.2) * 0.28 : 0);
+    ctx.translate(-r * 0.72, -r * 0.5);
     ctx.strokeStyle = hexA(p.dark, 0.9);
     ctx.lineWidth = Math.max(1.2, r * 0.13);
     ctx.beginPath();
@@ -573,9 +607,15 @@ function emojiBehindDetails(ctx, shape, r, p, alpha) {
     ctx.moveTo(r * 1.0, r * 1.1);
     ctx.lineTo(r * 1.0, r * 0.92);
     ctx.stroke();
+    ctx.restore();
   } else if (shape === 'angel') {
-    // Крылышки
+    // Крылышки — мягкие взмахи вокруг точки крепления к телу
+    const flap = now ? Math.sin(t * 5) * 0.16 : 0;
     const wing = s => {
+      ctx.save();
+      ctx.translate(s * r * 0.72, -r * 0.04);
+      ctx.rotate(-s * flap);
+      ctx.translate(-s * r * 0.72, r * 0.04);
       ctx.beginPath();
       ctx.moveTo(s * r * 0.72, -r * 0.24);
       ctx.quadraticCurveTo(s * r * 1.28, -r * 0.68, s * r * 1.16, -r * 0.02);
@@ -589,6 +629,7 @@ function emojiBehindDetails(ctx, shape, r, p, alpha) {
       ctx.strokeStyle = hexA(p.rim, 0.7);
       ctx.lineWidth = Math.max(0.8, r * 0.045);
       ctx.stroke();
+      ctx.restore();
     };
     wing(-1);
     wing(1);
@@ -607,21 +648,28 @@ function emojiBehindDetails(ctx, shape, r, p, alpha) {
     g.addColorStop(0, hexA(p.light, 0.95));
     g.addColorStop(1, hexA(p.base, 0.6));
     ctx.fillStyle = g;
-    tongue(-r * 0.46, r * 0.2, -r * 1.3, -r * 0.42);
-    tongue(r * 0.46, r * 0.2, -r * 1.3, -r * 0.42);
-    tongue(0, r * 0.26, -r * 1.66, -r * 0.5);
+    // Каждый язык дрожит в своём ритме — две синусоиды дают живое, неповторяющееся пламя
+    const flick = (k) => now ? (Math.sin(t * 9 + k * 2.1) * 0.6 + Math.sin(t * 14.3 + k) * 0.4) * r * 0.09 : 0;
+    tongue(-r * 0.46, r * 0.2, -r * 1.3 + flick(1), -r * 0.42);
+    tongue(r * 0.46, r * 0.2, -r * 1.3 + flick(2), -r * 0.42);
+    tongue(0, r * 0.26, -r * 1.66 + flick(3), -r * 0.5);
   } else if (shape === 'heart') {
-    // Маленькое сердечко-хохолок, чтобы круг не был просто розвым шаром
+    // Маленькое сердечко-хохолок, бьётся двойным «тук-тук» примерно раз в секунду
+    const cycle = (t * 1.1) % 1;
+    const thump = (c, at) => Math.exp(-Math.pow((c - at) / 0.05, 2));
+    const beat = now ? thump(cycle, 0.1) + thump(cycle, 0.28) * 0.6 : 0;
     ctx.fillStyle = hexA(p.dark, 0.9);
     ctx.beginPath();
-    slimeHeartPath(ctx, 0, -r * 1.02, r * 0.32);
+    slimeHeartPath(ctx, 0, -r * 1.02, r * 0.32 * (1 + beat * 0.16));
     ctx.fill();
     ctx.fillStyle = hexA(p.light, 0.5);
     ctx.beginPath();
     ctx.arc(-r * 0.1, -r * 1.16, r * 0.06, 0, Math.PI * 2);
     ctx.fill();
   } else if (shape === 'surprised') {
-    // Всплеск-капелька над макушкой
+    // Всплеск-капелька над макушкой — подпрыгивает от удивления
+    ctx.save();
+    ctx.translate(0, now ? -Math.abs(Math.sin(t * 4)) * r * 0.08 : 0);
     ctx.fillStyle = hexA(p.rim, 0.85);
     ctx.beginPath();
     ctx.moveTo(r * 0.5, -r * 0.96);
@@ -629,6 +677,7 @@ function emojiBehindDetails(ctx, shape, r, p, alpha) {
     ctx.quadraticCurveTo(r * 0.32, -r * 1.3, r * 0.5, -r * 0.96);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -653,11 +702,19 @@ function emojiFrontDetails(ctx, shape, r, p, alpha, now) {
 // Лицо: рисуется вектором прямо по поверхности тела, поэтому кажется частью геля.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
+function drawEmojiFace(ctx, faceStyle, r, p, alpha, blink = 0) {
   const ink = hexA(p.dark, 0.92);
   const eyeY = -r * 0.08;
   const eyeX = r * 0.34;
   const eyeR = r * 0.2;
+  // Моргание: сплющиваем по вертикали только глаза, брови и рот остаются на месте
+  const eyesBegin = () => {
+    ctx.save();
+    ctx.translate(0, eyeY);
+    ctx.scale(1, 1 - 0.85 * blink);
+    ctx.translate(0, -eyeY);
+  };
+  const eyesEnd = () => ctx.restore();
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -666,6 +723,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
 
   if (faceStyle === 'heartEyes') {
     // Глаза-сердечки: тёмная сердцевина, чтобы читались на пурпурном геле
+    eyesBegin();
     ctx.fillStyle = ink;
     ctx.shadowColor = 'rgba(255,60,130,0.5)';
     ctx.shadowBlur = r * 0.2;
@@ -681,6 +739,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
       ctx.arc(s * eyeX - eyeR * 0.28, eyeY - eyeR * 0.3, eyeR * 0.18, 0, Math.PI * 2);
       ctx.fill();
     }
+    eyesEnd();
     // Влюблённая улыбка
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(1.2, r * 0.085);
@@ -696,6 +755,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
     }
   } else if (faceStyle === 'eager') {
     // Задорный азартный взгляд
+    eyesBegin();
     ctx.fillStyle = '#FFFFFF';
     for (const s of [-1, 1]) {
       ctx.beginPath();
@@ -714,6 +774,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
       ctx.arc(s * eyeX - r * 0.07, eyeY - r * 0.08, eyeR * 0.22, 0, Math.PI * 2);
       ctx.fill();
     }
+    eyesEnd();
     // Приподнятые брови
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(1, r * 0.06);
@@ -731,6 +792,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
     ctx.stroke();
   } else if (faceStyle === 'sly') {
     // Хитрый прищур
+    eyesBegin();
     ctx.fillStyle = '#FFFFFF';
     for (const s of [-1, 1]) {
       ctx.beginPath();
@@ -743,6 +805,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
       ctx.ellipse(s * eyeX + r * 0.04, eyeY + r * 0.03, eyeR * 0.5, eyeR * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    eyesEnd();
     // Нахмуренные брови
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(1, r * 0.07);
@@ -789,6 +852,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
   } else if (faceStyle === 'wow') {
     // Широко раскрытые глаза с большими зрачками
     const er = eyeR * 0.92;
+    eyesBegin();
     ctx.fillStyle = '#FFFFFF';
     for (const s of [-1, 1]) {
       ctx.beginPath();
@@ -807,6 +871,7 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha) {
       ctx.arc(s * eyeX - er * 0.3, eyeY - er * 0.34, er * 0.24, 0, Math.PI * 2);
       ctx.fill();
     }
+    eyesEnd();
     // Ротик буквой «О»
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(1.2, r * 0.08);
@@ -828,7 +893,7 @@ function drawEmojiSlime(ctx, cfg, r, now, opacity, opts = {}) {
   ctx.save();
   ctx.globalAlpha = opacity * 0.3;
   const halo = ctx.createRadialGradient(0, 0, r * 0.55, 0, 0, r * 1.6);
-  halo.addColorStop(0, hexA(p.glow, 0.45));
+  halo.addColorStop(0, hexA(p.glow, 0.45 * GLOW_SCALE));
   halo.addColorStop(1, hexA(p.glow, 0));
   ctx.fillStyle = halo;
   ctx.beginPath();
@@ -836,7 +901,7 @@ function drawEmojiSlime(ctx, cfg, r, now, opacity, opts = {}) {
   ctx.fill();
   ctx.restore();
 
-  emojiBehindDetails(ctx, shape, r, p, opacity);
+  emojiBehindDetails(ctx, shape, r, p, opacity, now, opts.seed || 0);
 
   // Тело: объёмный градиент
   ctx.save();
@@ -908,7 +973,7 @@ function drawEmojiSlime(ctx, cfg, r, now, opacity, opts = {}) {
   ctx.globalAlpha = opacity;
 
   // Лицо вплавлено в тело
-  drawEmojiFace(ctx, cfg.faceStyle, r, p, opacity * 0.95);
+  drawEmojiFace(ctx, cfg.faceStyle, r, p, opacity * 0.95, now ? slimeBlinkAmount(opts.seed || cfg.level, now) : 0);
   ctx.restore();
 
   // Иридесцентный ободок
@@ -978,7 +1043,7 @@ function updateCollectionBar() {
   if (!collectionCanvasRect || collectionCanvasRect.width < 2 || collectionCanvasRect.height < 2) return;
   const cssW = collectionCanvasRect.width;
   const cssH = collectionCanvasRect.height;
-  const dprNow = window.devicePixelRatio || 1;
+  const dprNow = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
   const g = collectionCtx;
   const now = performance.now();
   const pw = Math.round(cssW * dprNow);
@@ -1056,6 +1121,11 @@ function updateUnlockFly() {
 
 function bootstrap() {
   updateCanvasRect();
+  // Переход в лёгкий режим меняет потолок DPR — пересобираем холсты под новую плотность
+  quality.onChange(() => {
+    updateCanvasRect();
+    collectionLayoutKey = -1;
+  });
   window.addEventListener('resize', updateCanvasRect);
   window.addEventListener('load', updateCanvasRect);
   if (window.visualViewport) {
@@ -1093,6 +1163,7 @@ function startGame(themeId) {
   Events.on(engine, 'afterUpdate', handleCosmicAttraction);
   Events.on(engine, 'afterUpdate', containSlimes);
   gameStartTime = performance.now();
+  runStartCollectionMax = progress.getThemeMaxLevel(currentThemeId);
   spawnNextSlime();
   updatePreview();
   updateUI();
@@ -1131,6 +1202,8 @@ function setupStartScreen() {
     recordLabelEl: startRecordLabelEl,
     playBtn: startPlayBtn,
     draw: drawStartSlime,
+    // Рисует слайм в произвольный контекст без свечения — из этого стартовый экран лепит силуэты
+    drawOn: (g, slot, now, glowScale = 0) => drawPanelSlime(g, slot, now, glowScale),
     radiusOf: startRadiusOf,
     onPlay: handleStartPlay
   });
@@ -1144,7 +1217,7 @@ function updateCanvasRect() {
     return;
   }
   canvasRect = rect;
-  dpr = Math.min(window.devicePixelRatio || 1, lowPower ? 1.5 : 2);
+  dpr = Math.min(window.devicePixelRatio || 1, lowPower ? 1.5 : 2, quality.maxDpr());
   layoutScale = Math.max(0.58, Math.min(1, canvasRect.width / 640));
   canvas.width = canvasRect.width * dpr;
   canvas.height = canvasRect.height * dpr;
@@ -1639,8 +1712,10 @@ function computeBowlGeometry() {
   const t = wallT();
   const wallHeight = bowlH();
   const topWidth = bowlW();
-  // Animals uses a square bamboo pen (straight walls); space/ocean keep the tapered bowl
-  const bottomRatio = currentThemeId === 'animals' ? 0.97 : 0.7;
+  // Animals uses a bamboo pen with gently sloped walls; space/ocean keep the deeper taper.
+  // A slight slope matters for physics too: in a near-square pen stacked cubes had no way
+  // to slide up and out of each other.
+  const bottomRatio = currentThemeId === 'animals' ? 0.88 : 0.7;
   const bottomWidth = topWidth * bottomRatio;
   const bb = bottomWidth / 2;
   const bt = topWidth / 2;
@@ -1716,13 +1791,49 @@ function setupEventListeners() {
   canvas.addEventListener('touchcancel', handleTouchCancel);
   window.addEventListener('keydown', handleKeyDown);
 
-  restartBtn.addEventListener('click', restartGame);
+  restartBtn.addEventListener('click', requestRestart);
   playAgainBtn.addEventListener('click', restartGame);
   backToMenuBtn.addEventListener('click', backToMain);
   if (lbToggle) lbToggle.addEventListener('click', toggleLeaderboardPanel);
 
   Events.on(engine, 'collisionStart', handleCollisionStart);
   Events.on(engine, 'collisionActive', handleCollisionActive);
+}
+
+// Рестарт посреди партии — только после подтверждения: кнопка маленькая и стоит рядом с бустером
+function requestRestart() {
+  if (isGameOver || (score === 0 && slimes.length <= 1)) {
+    restartGame();
+    return;
+  }
+  askConfirm({ title: 'RESTART?', text: 'Current game will be lost', yes: 'RESTART', onYes: restartGame });
+}
+
+// Общий диалог подтверждения. Физика на паузе, пока он открыт.
+function askConfirm({ title, text, yes, onYes }) {
+  if (!confirmOverlay) {
+    onYes();
+    return;
+  }
+  confirmAction = onYes;
+  confirmTitleEl.textContent = title;
+  confirmTextEl.textContent = text;
+  confirmYesBtn.textContent = yes;
+  setTimescale(0);
+  confirmOverlay.classList.remove('hidden');
+}
+
+function closeConfirm(run) {
+  if (!isConfirmOpen()) return;
+  const action = confirmAction;
+  confirmAction = null;
+  confirmOverlay.classList.add('hidden');
+  setTimescale(bhMode ? 0.25 : 1);
+  if (run && action) action();
+}
+
+function isConfirmOpen() {
+  return !!(confirmOverlay && !confirmOverlay.classList.contains('hidden'));
 }
 
 function toggleLeaderboardPanel() {
@@ -1788,7 +1899,7 @@ function handleTouchStart(e) {
       lastPointer = { x: ax, y: ay };
       suppressEndDrop = true;
       if (bhMode) {
-        lastPointer = { x: ax, y: ay - BH_TOUCH_LIFT };
+        lastPointer = { x: ax, y: ay };
         attemptBlackHoleConsume(ax, ay);
       } else {
         dropSlime();
@@ -1801,11 +1912,13 @@ function handleTouchStart(e) {
   lastPointer = { x: ax, y: ay };
   touchActiveId = added.identifier;
   if (bhMode) {
-    lastPointer = { x: ax, y: ay - BH_TOUCH_LIFT };
+    bhTouchStart = { x: ax, y: ay };
+    bhDragAim = false;
     return;
   }
+  // Слайм прыгает под палец, дальше тянется за ним относительно — тап сбоку роняет туда, куда тапнули
   dragOriginX = ax;
-  dragStartPreviewX = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
+  dragStartPreviewX = clampDropX(ax);
   targetX = dragStartPreviewX;
   updatePreviewPosition();
 }
@@ -1817,7 +1930,10 @@ function handleTouchMove(e) {
     const t = e.touches[0];
     const px = t.clientX - canvasRect.left;
     const py = t.clientY - canvasRect.top;
-    lastPointer = bhMode ? { x: px, y: py - BH_TOUCH_LIFT } : { x: px, y: py };
+    if (bhMode && bhTouchStart && !bhDragAim && Math.hypot(px - bhTouchStart.x, py - bhTouchStart.y) > BH_DRAG_THRESHOLD) {
+      bhDragAim = true;
+    }
+    lastPointer = bhMode && bhDragAim ? { x: px, y: py - BH_TOUCH_LIFT } : { x: px, y: py };
   }
   if (bhMode) return;
   const touch = findTrackedTouch(e.touches);
@@ -1838,6 +1954,8 @@ function handleTouchEnd(e) {
   if (isGameOver) return;
   if (bhMode) {
     if (!endDrop && lastPointer) attemptBlackHoleConsume(lastPointer.x, lastPointer.y);
+    bhTouchStart = null;
+    bhDragAim = false;
     return;
   }
   if (!endDrop) dropSlime();
@@ -1852,6 +1970,10 @@ function handleTouchCancel() {
 
 function handleKeyDown(e) {
   if (adJob) return;
+  if (isConfirmOpen()) {
+    if (e.code === 'Escape') closeConfirm(false);
+    return;
+  }
   if (e.code === 'Escape' && (bhMode || bhConfirmTarget)) {
     if (bhConfirmTarget) {
       closeBhConfirm();
@@ -1864,6 +1986,15 @@ function handleKeyDown(e) {
     if (bhMode) return;
     e.preventDefault();
     dropSlime();
+    return;
+  }
+  // Прицеливание с клавиатуры: стрелки или A/D
+  const dir = (e.code === 'ArrowLeft' || e.code === 'KeyA') ? -1 : (e.code === 'ArrowRight' || e.code === 'KeyD') ? 1 : 0;
+  if (dir && !isGameOver && !bhMode) {
+    e.preventDefault();
+    const from = renderPreviewX != null ? renderPreviewX : canvasRect.width / 2;
+    targetX = clampDropX(from + dir * 22);
+    updatePreviewPosition();
   }
 }
 
@@ -1938,7 +2069,12 @@ function spawnNextSlime() {
 function dropSlime() {
   if (bhMode) return;
   const now = performance.now();
-  if (now - lastDropTime < DROP_COOLDOWN) return;
+  if (now - lastDropTime < DROP_COOLDOWN) {
+    // Тап во время паузы не теряется: слайм упадёт, как только пауза закончится
+    pendingDrop = true;
+    return;
+  }
+  pendingDrop = false;
   lastDropTime = now;
   totalDrops += 1;
 
@@ -2231,12 +2367,18 @@ function performMerge(a, b) {
 
   createMergeEffect(anchorX, midY, config);
 
-  const newSlime = createSlime(anchorX, midY, config);
+  // Новый слайм крупнее: ставим его так, чтобы низ совпал с низом нижнего из пары,
+  // иначе он появляется наполовину в полу и в соседях. Позицию каждый кадр не прибиваем —
+  // прибитое тело физика сдвинуть не может, и в прямоугольном загоне соседи застревали внутри него.
+  const rOld = lower.config.radius * layoutScale;
+  const rNew = config.radius * layoutScale;
+  const spawnY = midY - Math.max(0, rNew - rOld);
+
+  const newSlime = createSlime(anchorX, spawnY, config);
   newSlime.opacity = 1;
   newSlime.mergeAnim = { elapsed: 0, duration: 260 };
   newSlime.mergePop = { elapsed: 0, duration: MERGE_POP_DURATION };
   newSlime.body.plugin.mergeCooldown = MERGE_SPAWN_COOLDOWN;
-  newSlime.mergeAnchor = { x: anchorX, y: midY };
   newSlime.bodyScale = MERGE_SPAWN_START_SCALE;
   newSlime.mergedScale = MERGE_SPAWN_START_SCALE;
   Body.scale(newSlime.body, MERGE_SPAWN_START_SCALE, MERGE_SPAWN_START_SCALE);
@@ -2395,6 +2537,12 @@ function updateUI() {
     const cname = getCollectionName(maxLevelReached, currentThemeId);
     collectionLabel.textContent = cname || '';
   }
+  const nameEl = document.getElementById('collection-panel-name');
+  if (nameEl) {
+    nameEl.textContent = currentThemeId === 'space' || !THEMES[currentThemeId]
+      ? 'PLANETS'
+      : THEMES[currentThemeId].title.toUpperCase();
+  }
   const countEl = document.getElementById('collection-panel-count');
   if (countEl) {
     const levels = collectionLevels(currentThemeId);
@@ -2449,6 +2597,9 @@ function setupBoostersUI() {
     if (adCloseBtn) adCloseBtn.addEventListener('click', closeAdOverlay);
     if (bhConfirmYesBtn) bhConfirmYesBtn.addEventListener('click', confirmBhConsume);
     if (bhConfirmNoBtn) bhConfirmNoBtn.addEventListener('click', closeBhConfirm);
+    if (bhCancelBtn) bhCancelBtn.addEventListener('click', () => exitBlackHoleMode(false));
+    if (confirmYesBtn) confirmYesBtn.addEventListener('click', () => closeConfirm(true));
+    if (confirmNoBtn) confirmNoBtn.addEventListener('click', () => closeConfirm(false));
   }
   updateBoosterUI();
   positionBoosterStickers();
@@ -2460,15 +2611,35 @@ function onBoosterClick(key) {
     exitBlackHoleMode(false);
     return;
   }
+  const btn = boosterEls[key];
+  if (btn) btn.classList.remove('fresh');
   if (!boostersUnlocked[key]) {
     sfx.playBoosterDenied();
+    showBoosterToast(btn ? btn.dataset.hint : '');
     return;
   }
   if (boosterCharges[key] > 0) {
     enterBlackHoleMode();
   } else {
-    startRewardAd(key);
+    askConfirm({
+      title: 'BLACK HOLE',
+      text: 'Watch a short ad to get +1 Black Hole?',
+      yes: 'WATCH AD',
+      onYes: () => startRewardAd(key)
+    });
   }
+}
+
+// Подсказка слева от кнопки бустера — hover-подсказки на телефонах не видны
+function showBoosterToast(text, ms = 2600) {
+  const btn = boosterEls.blackhole;
+  if (!boosterToast || !btn || !text || !canvasRect) return;
+  boosterToast.textContent = text;
+  boosterToast.style.top = btn.style.top;
+  boosterToast.style.right = Math.round(canvasRect.width - btn.offsetLeft + 8) + 'px';
+  boosterToast.classList.remove('hidden');
+  clearTimeout(boosterToastTimer);
+  boosterToastTimer = setTimeout(() => boosterToast.classList.add('hidden'), ms);
 }
 
 function updateBoosterUI() {
@@ -2486,7 +2657,7 @@ function updateBoosterUI() {
     if (countEl) countEl.classList.toggle('hidden', !unlocked || count === 0);
     if (badgeEl) badgeEl.classList.toggle('hidden', unlocked && count > 0);
     const hintText = !unlocked
-      ? `Unlock ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel, currentThemeId).name} to enable`
+      ? `Get ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel, currentThemeId).name} to unlock ${BOOSTER_NAMES[key]}`
       : count > 0
         ? `${BOOSTER_NAMES[key]} — ${count} in stock`
         : `${BOOSTER_NAMES[key]} — watch an ad to get +1`;
@@ -2499,7 +2670,8 @@ function positionBoosterStickers() {
   if (!canvasRect || !boosterEls.blackhole) return;
   const rb = document.getElementById('restart-btn');
   const keys = Object.keys(BOOSTER_DEFS);
-  const gap = 12;
+  // Отступ побольше, чтобы промах мимо бустера не попадал в рестарт
+  const gap = 22;
   let top = (rb ? rb.getBoundingClientRect().bottom - canvasRect.top : 56) + gap;
   for (const key of keys) {
     const btn = boosterEls[key];
@@ -2523,6 +2695,12 @@ function unlockBoostersThrough(level) {
   if (changed) {
     saveBoosterUnlocks();
     updateBoosterUI();
+    // Разово объясняем новый бустер — после того как отыграет поп-ап открытия слайма
+    const btn = boosterEls.blackhole;
+    if (btn) btn.classList.add('fresh');
+    setTimeout(() => {
+      if (!isGameOver) showBoosterToast('New! Black Hole eats any slime. Tap it, then tap a slime.', 4500);
+    }, 1600);
   }
 }
 
@@ -2552,16 +2730,35 @@ function stopBoosterEffects() {
   setTimescale(1);
   bhMode = false;
   bhHover = null;
+  pendingDrop = false;
+  showBhBanner(false);
   if (bhConfirmOverlay) bhConfirmOverlay.classList.add('hidden');
   bhConfirmTarget = null;
   if (canvas) canvas.style.cursor = '';
+}
+
+// Подпись режима над чашей: что делать и явная кнопка отмены (Esc на телефоне нет)
+function showBhBanner(on) {
+  if (!bhBanner) return;
+  if (!on) {
+    bhBanner.classList.add('hidden');
+    return;
+  }
+  const touch = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
+  if (bhBannerHint) bhBannerHint.textContent = touch ? 'Tap a slime to eat it' : 'Click a slime to eat it · Esc to cancel';
+  bhBanner.style.left = Math.round(bowlCenterX) + 'px';
+  bhBanner.style.top = Math.round(Math.max(96, bowlYTop - 14)) + 'px';
+  bhBanner.classList.remove('hidden');
 }
 
 function enterBlackHoleMode() {
   if (bhMode || isGameOver) return;
   bhMode = true;
   bhHover = null;
+  pendingDrop = false;
+  lastPointer = null;
   setTimescale(0.25);
+  showBhBanner(true);
   if (canvas) canvas.style.cursor = 'crosshair';
   sfx.playBlackHoleArm();
   updateBoosterUI();
@@ -2579,6 +2776,7 @@ function exitBlackHoleMode(success) {
   bhMode = false;
   bhHover = null;
   setTimescale(1);
+  showBhBanner(false);
   if (bhConfirmOverlay) bhConfirmOverlay.classList.add('hidden');
   bhConfirmTarget = null;
   if (canvas) canvas.style.cursor = '';
@@ -2753,33 +2951,15 @@ function triggerGameOver() {
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
 
-  finalScoreEl.textContent = score.toLocaleString();
+  finalScoreEl.textContent = '0';
   const topConfig = getSlimeConfig(maxLevelReached, currentThemeId);
-  if (finalSlimeAvatarEl) {
-    const size = 48;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    finalSlimeAvatarEl.width = Math.round(size * dpr);
-    finalSlimeAvatarEl.height = Math.round(size * dpr);
-    const g = finalSlimeAvatarEl.getContext('2d');
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, size, size);
-    drawPanelSlime(g, {
-      level: maxLevelReached,
-      themeId: currentThemeId,
-      x: size / 2,
-      y: size / 2,
-      r: size * 0.44,
-      unlocked: true
-    }, performance.now());
-  }
   if (finalSlimeNameEl) finalSlimeNameEl.textContent = topConfig.name;
+  setGameOverAccent();
+  if (statBestEl) statBestEl.classList.toggle('record', isNewRecord);
   if (finalBestEl) finalBestEl.textContent = highScore.toLocaleString();
   if (finalMergesEl) finalMergesEl.textContent = totalMerges.toLocaleString();
   if (finalComboEl) finalComboEl.textContent = `×${bestCombo}`;
   if (finalTimeEl) finalTimeEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-  if (finalCollectionEl) {
-    finalCollectionEl.textContent = `${Math.min(PLANET_TOTAL, Math.max(0, maxLevelReached - 5))} / ${PLANET_TOTAL}`;
-  }
   if (newRecordEl) {
     if (isNewRecord) newRecordEl.classList.remove('hidden');
     else newRecordEl.classList.add('hidden');
@@ -2790,7 +2970,183 @@ function triggerGameOver() {
   gameOverOverlay.classList.remove('hidden');
   previewEl.classList.add('hidden');
   gameOverBg.start();
+  drawGameOverCollection();
+  startGameOverAnim({ score, level: maxLevelReached, record: isNewRecord });
   leaderboardGameOver(score);
+}
+
+// Цвет экрана проигрыша — под мир: акцент берётся из темы
+function setGameOverAccent() {
+  const accent = (THEMES[currentThemeId] && THEMES[currentThemeId].accent) || '#00e8ff';
+  const n = parseInt(accent.replace('#', ''), 16);
+  gameOverOverlay.style.setProperty('--go-accent', accent);
+  gameOverOverlay.style.setProperty('--go-accent-rgb', `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`);
+}
+
+// Лента коллекции мира: открытые (за всё время) в цвете, новые за партию с меткой,
+// следующий к открытию обведён пульсирующим кольцом — повод сыграть ещё раз
+function drawGameOverCollection() {
+  if (!goStripCanvas) return;
+  const levels = Object.keys(collectionLevels(currentThemeId)).map(Number).sort((a, b) => a - b);
+  const owned = progress.getThemeMaxLevel(currentThemeId);
+  const openCount = levels.filter(l => l <= owned).length;
+  const newCount = levels.filter(l => l <= owned && l > runStartCollectionMax).length;
+  const next = levels.find(l => l > owned);
+  if (finalCollectionEl) finalCollectionEl.textContent = `${openCount} / ${levels.length}`;
+  if (goHintEl) {
+    goHintEl.textContent = newCount > 0
+      ? `✦ ${newCount} new discovered this game!`
+      : next ? 'Keep merging to discover the next one' : 'Collection complete!';
+  }
+
+  const w = goStripCanvas.clientWidth || 300;
+  const h = goStripCanvas.clientHeight || 40;
+  const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
+  goStripCanvas.width = Math.round(w * dpr);
+  goStripCanvas.height = Math.round(h * dpr);
+  const g = goStripCanvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const slot = w / levels.length;
+  // Ореолы эмодзи и кольца планет выходят за радиус — оставляем им место по высоте полосы
+  const r = Math.min(14, slot * 0.34, h * 0.29);
+  const accent = (THEMES[currentThemeId] && THEMES[currentThemeId].accent) || '#00e8ff';
+  levels.forEach((lv, i) => {
+    const x = slot * (i + 0.5);
+    const y = h / 2;
+    if (lv <= owned) {
+      drawPanelSlime(g, { level: lv, themeId: currentThemeId, x, y, r, unlocked: true }, 0, 0.5);
+      if (lv > runStartCollectionMax) {
+        g.save();
+        g.fillStyle = accent;
+        g.strokeStyle = '#0b0f22';
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.arc(x + r * 0.9, y - r * 0.9, 4, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+        g.restore();
+      }
+    } else {
+      g.save();
+      g.globalAlpha = 0.55;
+      drawLockedSlot(g, lv, x, y, r * 0.9, currentThemeId);
+      g.restore();
+    }
+  });
+  if (goNextRingEl) {
+    const idx = next ? levels.indexOf(next) : -1;
+    goNextRingEl.classList.toggle('hidden', idx < 0);
+    if (idx >= 0) {
+      const size = Math.round(r * 2 + 8);
+      goNextRingEl.style.left = Math.round(slot * (idx + 0.5)) + 'px';
+      goNextRingEl.style.width = size + 'px';
+      goNextRingEl.style.height = size + 'px';
+    }
+  }
+}
+
+// Живая часть экрана проигрыша: герой покачивается (звери машут крыльями, эмодзи моргают),
+// счёт набегает от нуля, при новом рекорде летит конфетти
+function startGameOverAnim({ score: finalScore, level, record }) {
+  stopGameOverAnim();
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
+  const t0 = performance.now();
+
+  const hero = finalSlimeAvatarEl;
+  const heroSize = (hero && hero.clientWidth) || 112;
+  let hg = null;
+  if (hero) {
+    hero.width = Math.round(heroSize * dpr);
+    hero.height = Math.round(heroSize * dpr);
+    hg = hero.getContext('2d');
+  }
+
+  let cg = null;
+  let cw = 0;
+  let ch = 0;
+  const bits = [];
+  if (record && !reduce && goConfettiCanvas) {
+    cw = goConfettiCanvas.clientWidth;
+    ch = goConfettiCanvas.clientHeight;
+    goConfettiCanvas.width = Math.round(cw * dpr);
+    goConfettiCanvas.height = Math.round(ch * dpr);
+    cg = goConfettiCanvas.getContext('2d');
+    const accent = (THEMES[currentThemeId] && THEMES[currentThemeId].accent) || '#00e8ff';
+    const colors = [accent, '#ff3399', '#00e8ff', '#ffd400', '#ffffff'];
+    for (let i = 0; i < 90; i++) {
+      bits.push({
+        x: cw / 2 + (Math.random() - 0.5) * 60,
+        y: ch * 0.3,
+        vx: (Math.random() - 0.5) * 7,
+        vy: -2 - Math.random() * 6,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.4,
+        w: 5 + Math.random() * 4,
+        h: 3 + Math.random() * 2,
+        color: colors[i % colors.length]
+      });
+    }
+  } else if (goConfettiCanvas) {
+    goConfettiCanvas.width = 0;
+  }
+
+  let shownScore = -1;
+  let lastNow = t0;
+  const CONFETTI_AT = 1350;
+  const CONFETTI_FOR = 3200;
+  const tick = (now) => {
+    const t = now - t0;
+    const dt = Math.min(50, now - lastNow) / 16.67;
+    lastNow = now;
+
+    const p = reduce ? 1 : Math.max(0, Math.min(1, (t - 250) / 1100));
+    const v = Math.round(finalScore * (1 - Math.pow(1 - p, 3)));
+    if (v !== shownScore) {
+      shownScore = v;
+      finalScoreEl.textContent = v.toLocaleString();
+    }
+
+    if (hg) {
+      hg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      hg.clearRect(0, 0, heroSize, heroSize);
+      const bob = reduce ? 0 : Math.sin(now * 0.003) * heroSize * 0.03;
+      drawPanelSlime(hg, { level, themeId: currentThemeId, x: heroSize / 2, y: heroSize / 2 + bob, r: heroSize * 0.3, unlocked: true }, reduce ? 0 : now, 0.8);
+    }
+
+    if (cg && t >= CONFETTI_AT && t <= CONFETTI_AT + CONFETTI_FOR) {
+      const life = (t - CONFETTI_AT) / CONFETTI_FOR;
+      cg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cg.clearRect(0, 0, cw, ch);
+      cg.globalAlpha = life > 0.7 ? (1 - life) / 0.3 : 1;
+      for (const b of bits) {
+        b.vy += 0.16 * dt;
+        b.vx *= 0.99;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.rot += b.vr * dt;
+        cg.save();
+        cg.translate(b.x, b.y);
+        cg.rotate(b.rot);
+        cg.fillStyle = b.color;
+        cg.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        cg.restore();
+      }
+    } else if (cg && t > CONFETTI_AT + CONFETTI_FOR) {
+      cg.setTransform(1, 0, 0, 1, 0, 0);
+      cg.clearRect(0, 0, goConfettiCanvas.width, goConfettiCanvas.height);
+      cg = null;
+    }
+
+    goAnimRaf = requestAnimationFrame(tick);
+  };
+  goAnimRaf = requestAnimationFrame(tick);
+}
+
+function stopGameOverAnim() {
+  if (goAnimRaf) cancelAnimationFrame(goAnimRaf);
+  goAnimRaf = 0;
 }
 
 function restartGame() {
@@ -2802,7 +3158,9 @@ function restartGame() {
   totalDrops = 0;
   isNewRecord = false;
   gameStartTime = performance.now();
+  runStartCollectionMax = progress.getThemeMaxLevel(currentThemeId);
   gameOverBg.stop();
+  stopGameOverAnim();
   slimes = [];
   slimeByBody.clear();
   mergeEffects.length = 0;
@@ -2861,6 +3219,7 @@ function backToMain() {
   }
   Runner.stop(runner);
   gameOverBg.stop();
+  stopGameOverAnim();
   stopBoosterEffects();
   closeAdOverlay();
   slimes = [];
@@ -2976,19 +3335,12 @@ function updateSlimesVisual(dt = 16.67) {
       }
       slime.mergedScale = target;
 
-      if (slime.mergeAnchor) {
-        Body.setPosition(slime.body, slime.mergeAnchor);
-        Body.setVelocity(slime.body, { x: 0, y: 0 });
-        Body.setAngularVelocity(slime.body, 0);
-      }
-
       if (progress >= 1) {
         if (slime.bodyScale !== 1) {
           Body.scale(slime.body, 1 / slime.bodyScale, 1 / slime.bodyScale);
           slime.bodyScale = 1;
         }
         slime.mergeAnim = null;
-        slime.mergeAnchor = null;
         slime.opacity = 1;
         slime.mergedScale = 1;
       }
@@ -3023,6 +3375,10 @@ function gameLoop() {
   const now = performance.now();
   let dt = lastFrameTime ? now - lastFrameTime : 16.67;
   lastFrameTime = now;
+  if (!isGameOver) quality.sample(dt);
+  const cooling = !isGameOver && now - lastDropTime < DROP_COOLDOWN;
+  if (previewEl.classList.contains('cooling') !== cooling) previewEl.classList.toggle('cooling', cooling);
+  if (pendingDrop && !cooling && !isGameOver && !bhMode && !isConfirmOpen()) dropSlime();
   if (dt > 50) dt = 50;
   if (dt <= 0) dt = 16.67;
   if (!isGameOver) {
@@ -3035,7 +3391,11 @@ function gameLoop() {
   updateTargetHover();
   updateUnlockFly();
   updateCollectionBar();
-  renderCustom();
+  // Под оверлеем Game Over стоит backdrop-filter: каждая перерисовка сцены заставила бы
+  // браузер заново считать размытие. Физика уже остановлена — достаточно последнего кадра.
+  if (!isGameOver) sceneFrozen = false;
+  if (!sceneFrozen) renderCustom();
+  if (isGameOver) sceneFrozen = true;
   gameLoopRaf = requestAnimationFrame(gameLoop);
 }
 
@@ -3152,14 +3512,6 @@ function drawTargetModeOverlay(ctx, now) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  const labelY = Math.max(26, bowlYTop - 30);
-  ctx.fillStyle = 'rgba(205, 150, 255, 0.95)';
-  ctx.font = '800 12px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('BLACK HOLE: tap a slime', bowlCenterX, labelY);
-  ctx.fillStyle = 'rgba(180, 130, 255, 0.75)';
-  ctx.font = '600 10px sans-serif';
-  ctx.fillText('Esc or click away — cancel', bowlCenterX, labelY + 13);
   ctx.restore();
 }
 
@@ -3906,9 +4258,11 @@ function drawJungleBowl(ctx) {
 
   // 4. Rope bindings wrapping the corners
   for (const side of [-1, 1]) {
-    const cornerX = centerX + side * bt2;
-    drawRopeTie(ctx, cornerX - wth * 0.2, cornerX + wth * 1.15, wallTopY - poleW * 0.5, poleW * 1.1);
-    drawRopeTie(ctx, cornerX - wth * 0.2, cornerX + wth * 1.15, yB + poleW * 0.5, poleW * 1.1);
+    const topX = centerX + side * bt2;
+    const bottomX = centerX + side * bb;
+    // Обвязка идёт наружу, по столбам — зеркально для обеих стенок
+    drawRopeTie(ctx, topX - side * wth * 0.2, topX + side * wth * 1.15, wallTopY - poleW * 0.5, poleW * 1.1);
+    drawRopeTie(ctx, bottomX - side * wth * 0.2, bottomX + side * wth * 1.15, yB + poleW * 0.5, poleW * 1.1);
   }
 
   // 5. Leaves sprouting at the top joints
@@ -4309,6 +4663,16 @@ function seededRnd(seed, i) {
   return x - Math.floor(x);
 }
 
+// Покачивание детали из SlimeConfig: sway = { amp (градусы), speed, phase?, mirror? }.
+// Левая и правая детали по умолчанию зеркалятся — крылья и уши машут синхронно.
+// Возвращает угол в радианах; при now = 0 (статичная отрисовка) — ноль.
+function featureSway(item, now, seed) {
+  const sw = item.sway;
+  if (!sw || !now) return 0;
+  const mirror = sw.mirror === false ? 1 : (item.x < 0 ? -1 : 1);
+  return mirror * sw.amp * Math.PI / 180 * Math.sin(now * (sw.speed || 0.006) + (sw.phase || 0) + (seed || 0));
+}
+
 function drawAura(ctx, config, r, now, opacity, glowColor) {
   const aura = config.aura;
   if (!aura) return;
@@ -4339,7 +4703,7 @@ function drawAnimalBody(ctx, slime, config, sizeX, sizeY, chamfer, now, opacity,
   ctx.save();
   ctx.globalAlpha = opacity * 0.3;
   const halo = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, haloR);
-  halo.addColorStop(0, hexA(p.glow, 0.45));
+  halo.addColorStop(0, hexA(p.glow, 0.45 * GLOW_SCALE));
   halo.addColorStop(1, hexA(p.glow, 0));
   ctx.fillStyle = halo;
   ctx.beginPath();
@@ -4410,7 +4774,7 @@ function drawEmojiSlimeBody(ctx, slime, config, r, now, opacity, glowColor, glow
   drawAura(ctx, config, r, now, opacity, glowColor);
   ctx.restore();
 }
-function drawPanelAnimal(g, slime, config, r, opacity) {
+function drawPanelAnimal(g, slime, config, r, opacity, now = 0) {
   const p = config.palette;
   const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
 
@@ -4418,7 +4782,7 @@ function drawPanelAnimal(g, slime, config, r, opacity) {
   g.save();
   g.globalAlpha = opacity * 0.55;
   const aura = g.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.7);
-  aura.addColorStop(0, hexA(config.glowColor || p.glow, 0.5));
+  aura.addColorStop(0, hexA(config.glowColor || p.glow, 0.5 * GLOW_SCALE));
   aura.addColorStop(1, hexA(config.glowColor || p.glow, 0));
   g.fillStyle = aura;
   g.beginPath();
@@ -4480,7 +4844,7 @@ function drawPanelAnimal(g, slime, config, r, opacity) {
   drawAnimalSurface(g, slime, config, r * 2, r * 2, 0, p);
   g.restore();
 
-  drawAnimalExtras(g, slime, config, r * 2, r * 2, 0, p);
+  drawAnimalExtras(g, slime, config, r * 2, r * 2, now, p);
 
   // Глянцевый блик «карамельного стекла» — держим по краям, чтобы не засветлять мордочку
   g.save();
@@ -4805,6 +5169,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
   const f = config.features;
   const F = (v) => v * sizeX;
   if (!f) return;
+  const seed = slime && slime.seed ? slime.seed : 0;
 
   // Пышный воротник-мех (мишка, лев) — рисуется под ушами, чтобы не перекрывать их
   if (f.mane) {
@@ -4841,6 +5206,15 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
       const ey = F(ear.y);
       const eR = Math.max(1, (ear.r || ear.rx || 0.15) * sizeX);
       const eEdge = ear.edgeColor || earEdge;
+      // Ухо качается вокруг своего основания, а не центра
+      const earSway = featureSway(ear, now, seed);
+      ctx.save();
+      if (earSway) {
+        const baseY = ey + (ear.ry || ear.r || ear.rx || 0.15) * sizeX * 0.8;
+        ctx.translate(ex, baseY);
+        ctx.rotate(earSway);
+        ctx.translate(-ex, -baseY);
+      }
       const strokeEar = () => {
         if (!eEdge) return;
         ctx.lineWidth = Math.max(1.2, F(ear.edgeWidth || 0.018));
@@ -4889,6 +5263,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
           ctx.fill();
         }
       }
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -5042,16 +5417,20 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
       ctx.lineWidth = aW;
       ctx.lineCap = 'round';
       ctx.strokeStyle = hexA(a.color || config.darkColor || p.dark, 0.9);
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(featureSway(a, now, seed));
       ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.quadraticCurveTo(ax + aW * 1.5, ay - aLen * 0.4, ax, ay - aLen);
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(aW * 1.5, -aLen * 0.4, 0, -aLen);
       ctx.stroke();
       if (a.ballR) {
         ctx.fillStyle = hexA(a.color || config.darkColor || p.dark, 0.9);
         ctx.beginPath();
-        ctx.arc(ax, ay - aLen, F(a.ballR), 0, Math.PI * 2);
+        ctx.arc(0, -aLen, F(a.ballR), 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -5128,7 +5507,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
   if (f.stinger) {
     ctx.save();
     ctx.translate(F(f.stinger.x), F(f.stinger.y));
-    ctx.rotate((f.stinger.angle || 0) * Math.PI / 180);
+    ctx.rotate((f.stinger.angle || 0) * Math.PI / 180 + featureSway(f.stinger, now, seed));
     const sl = F(f.stinger.length || 0.12);
     const sw = F(f.stinger.width || 0.06);
     ctx.beginPath();
@@ -5148,7 +5527,7 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
     for (const c of feathers) {
       ctx.save();
       ctx.translate(F(c.x), F(c.y));
-      ctx.rotate((c.angle || 0) * Math.PI / 180);
+      ctx.rotate((c.angle || 0) * Math.PI / 180 + featureSway(c, now, seed));
       const cl = F(c.length || 0.16);
       const cw = F(c.width || 0.05);
       ctx.beginPath();
@@ -5177,6 +5556,14 @@ function drawAnimalExtras(ctx, slime, config, sizeX, sizeY, now, p) {
       ctx.rotate((w.angle || 0) * Math.PI / 180);
       const wrx = F(w.rx);
       const wry = F(w.ry || w.rx);
+      // Взмах: крыло поворачивается вокруг края, прижатого к телу
+      const flap = featureSway(w, now, seed);
+      if (flap) {
+        const pivotX = w.x < 0 ? wrx * 0.8 : -wrx * 0.8;
+        ctx.translate(pivotX, 0);
+        ctx.rotate(flap);
+        ctx.translate(-pivotX, 0);
+      }
       ctx.beginPath();
       ctx.ellipse(0, 0, wrx, wry, 0, 0, Math.PI * 2);
       ctx.fillStyle = w.color || 'rgba(255, 255, 255, 0.6)';
@@ -5342,7 +5729,7 @@ function drawPlanetBody(ctx, slime, config, r, now, scale, opacity, glowColor, g
   ctx.globalAlpha = opacity * 0.3;
   const haloR = R * 1.65 + Math.sin(now * 0.002 + slime.seed) * R * 0.06;
   const halo = ctx.createRadialGradient(0, 0, R * 0.7, 0, 0, haloR);
-  halo.addColorStop(0, hexA(p.glow, 0.45));
+  halo.addColorStop(0, hexA(p.glow, 0.45 * GLOW_SCALE));
   halo.addColorStop(1, hexA(p.glow, 0));
   ctx.fillStyle = halo;
   ctx.beginPath();
@@ -5947,7 +6334,7 @@ function updateAmbientParticles(dt = 16.67) {
     slime.particleTimer -= dt;
     if (slime.particleTimer <= 0) {
       slime.particleTimer = interval * (0.6 + Math.random() * 0.8);
-      if (ambientParticles.length < (lowPower ? 80 : 120)) spawnAmbientParticle(slime);
+      if (ambientParticles.length < (lowPower || quality.low ? 60 : 120)) spawnAmbientParticle(slime);
     }
   }
   for (let i = ambientParticles.length - 1; i >= 0; i--) {
@@ -6034,6 +6421,8 @@ function slimeBlinkAmount(seed, now) {
 
 function drawSlimeFace(ctx, slime, now, sizeX, sizeY) {
   const cfg = slime.config;
+  // У эмодзи лицо своё, векторное (drawEmojiFace) — стандартные глаза его бы закрыли
+  if (cfg.isEmoji) return;
   const features = cfg.isAnimal && cfg.features ? cfg.features : null;
   const eyeStyle = features && features.eyeStyle ? features.eyeStyle : null;
   const eyeOff = features && features.eyeOffset

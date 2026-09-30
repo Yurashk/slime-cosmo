@@ -1,6 +1,7 @@
-import { THEMES, THEME_ORDER, themeSlimeLevels, entityIdOf } from './themes/registry.js';
-import { COLLECTIONS } from './SlimeConfig.js';
+import { THEMES, THEME_ORDER, entityIdOf } from './themes/registry.js';
+import { getSlimeConfig, collectionLevels } from './SlimeConfig.js';
 import { progress } from './state.js';
+import { quality } from './quality.js';
 
 const FONT = "'Orbitron', 'Montserrat', sans-serif";
 
@@ -79,6 +80,39 @@ function roundRectPath(g, x, y, w, h, r) {
   }
 }
 
+// Звёзды для фона: детерминированный генератор, чтобы небо не «прыгало» при ресайзе.
+// layer 0 — мелкая дальняя пыль, layer 1 — крупные ближние звёзды (плывут быстрее).
+function makeStars(W, H) {
+  const n = Math.round(clamp(70, (W * H) / 4200, 260));
+  let s = 1234567;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: n }, () => {
+    const layer = rnd() < 0.75 ? 0 : 1;
+    const tintRoll = rnd();
+    return {
+      x: rnd() * W,
+      y: rnd() * H,
+      r: layer ? 0.9 + rnd() * 0.9 : 0.4 + rnd() * 0.6,
+      tw: rnd() * Math.PI * 2,
+      ts: 0.0008 + rnd() * 0.0022,
+      layer,
+      color: tintRoll < 0.1 ? '#9FE8FF' : tintRoll < 0.18 ? '#FFB8E6' : '#FFFFFF'
+    };
+  });
+}
+
+// Подгоняет кегль, чтобы строка влезла в ширину капсулы
+function fitFontSize(g, str, maxW, size, minSize, spacing) {
+  let fs = size;
+  while (fs > minSize) {
+    g.font = `700 ${fs}px ${FONT}`;
+    const w = g.measureText(str).width + spacing * Math.max(0, str.length - 1);
+    if (w <= maxW) break;
+    fs -= 0.5;
+  }
+  return fs;
+}
+
 export function createStartScreen(opts) {
   const {
     canvasEl,
@@ -87,6 +121,7 @@ export function createStartScreen(opts) {
     recordLabelEl,
     playBtn,
     draw,
+    drawOn,
     radiusOf,
     onPlay
   } = opts;
@@ -102,12 +137,21 @@ export function createStartScreen(opts) {
   let animPop = null;
   let tooltipTimer = 0;
   let busy = false;
+  let titleBottom = 0;
+  const silhouetteCache = new Map();
+  const spriteCache = new Map();
+  // Когда последний раз трясли замок капсулы (тап по закрытому миру)
+  const lockShakeAt = {};
+  let lastFrameAt = 0;
 
   function measure() {
     const r = canvasEl.getBoundingClientRect();
     if (!r || r.width < 2 || r.height < 2) return false;
     rect = r;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const titleEl = document.querySelector('.start-title');
+    const tr = titleEl ? titleEl.getBoundingClientRect() : null;
+    titleBottom = tr && tr.height > 0 ? Math.round(tr.bottom - r.top) : 0;
+    const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
     const w = Math.round(r.width * dpr);
     const h = Math.round(r.height * dpr);
     if (canvasEl.width !== w || canvasEl.height !== h) {
@@ -118,31 +162,36 @@ export function createStartScreen(opts) {
     return true;
   }
 
-  function podData(W, H, cx, podW, id) {
+  function podData(W, H, cx, podW, id, podTop) {
     const t = THEMES[id];
     const disp = podDisplay(id);
     const s = Math.min(W, H);
     const capH = clamp(8, H * 0.011, 12);
-    const podTop = H * 0.245;
     const capY0 = podTop - capH - 3;
     const headerH = clamp(24, H * 0.032, 30);
-    const slimeY0 = podTop + headerH;
+    const footerH = clamp(38, H * 0.05, 46);
     const podBottom = H * 0.82;
-    const n = disp.kind === 'emoji' ? 5 : 9;
-    const r = clamp(15, s * 0.042, 22);
-    const slotsY1 = disp.kind === 'emoji' ? podBottom - r - 10 : podBottom - 8;
-    const step = (slotsY1 - slimeY0) / (n - 1);
-    const sway = clamp(14, podW * 0.2, 26);
-    const levels = disp.kind === 'emoji'
-      ? Object.keys(COLLECTIONS.ocean.levels).map(Number).sort((a, b) => a - b)
-      : themeSlimeLevels(id);
+    // В капсуле ровно коллекция мира: 9 планет, 6 зверей, 5 эмодзи
+    const levels = Object.keys(collectionLevels(id)).map(Number).sort((a, b) => a - b);
+    const n = levels.length;
+    const rBase = clamp(15, s * 0.042, 22);
+    // Батарейка заряжается снизу вверх: первый слайм внизу, последний наверху.
+    // Чем выше уровень, тем крупнее слайм — вершина коллекции выглядит наградой.
+    const radiusAt = i => Math.round((rBase * (0.8 + 0.32 * (n > 1 ? i / (n - 1) : 1))) * 2) / 2;
+    const rTop = radiusAt(n - 1);
+    // Эмодзи торчат над телом (пламя, рожки, сердечко) — наверху им нужен запас
+    const yTopSlot = podTop + headerH + rTop * (disp.kind === 'emoji' ? 1.5 : 0.9);
+    const yBottomSlot = podBottom - footerH - radiusAt(0) * 1.25;
+    const step = n > 1 ? (yBottomSlot - yTopSlot) / (n - 1) : 0;
+    const sway = clamp(12, podW * 0.2, 48);
     const slots = levels.map((lv, i) => ({
       level: lv,
       entityId: entityIdOf(id, lv),
       themeId: id,
-      r,
-      x: Math.round(cx + (i % 2 === 0 ? -1 : 1) * sway),
-      y: Math.round(slimeY0 + i * step),
+      r: radiusAt(i),
+      // Плавная змейка вместо жёсткого зигзага
+      x: Math.round(cx + Math.sin(i * 1.25 + 0.6) * sway),
+      y: Math.round(yBottomSlot - i * step),
       unlocked: false
     }));
     const unlocked = progress.isThemeUnlocked(id);
@@ -167,6 +216,7 @@ export function createStartScreen(opts) {
       capY0,
       capH,
       headerH,
+      footerH,
       yCenter: (podTop + podBottom) / 2
     };
   }
@@ -175,7 +225,8 @@ export function createStartScreen(opts) {
     const s = Math.min(W, H);
     const cx = W / 2;
     const r = clamp(9, s * 0.026, 17);
-    const yTop = H * 0.075;
+    // Пирамидка всегда под заголовком, а не поверх него
+    const yTop = Math.max(H * 0.075, titleBottom + r + 8);
     const yBot = yTop + r * 2.2;
     return {
       r,
@@ -192,15 +243,19 @@ export function createStartScreen(opts) {
 
   function computeLayout(W, H) {
     const gap = clamp(10, W * 0.018, 22);
-    const podW = (W - gap * 4) / 3;
-    const cxs = THEME_ORDER.map((_, i) => gap + podW / 2 + i * (podW + gap));
-    const pods = THEME_ORDER.map((id, i) => podData(W, H, cxs[i], podW, id));
-    return { pods, podW, gap, base: pyramidData(W, H) };
+    // На широких экранах капсулы не растягиваются в квадраты, а собираются по центру
+    const podW = Math.min((W - gap * 4) / 3, clamp(160, H * 0.34, 300));
+    const x0 = (W - (podW * 3 + gap * 2)) / 2;
+    const cxs = THEME_ORDER.map((_, i) => x0 + podW / 2 + i * (podW + gap));
+    const base = pyramidData(W, H);
+    const podTop = Math.max(H * 0.245, base.bottom + 30);
+    const pods = THEME_ORDER.map((id, i) => podData(W, H, cxs[i], podW, id, podTop));
+    return { pods, podW, gap, base, stars: makeStars(W, H) };
   }
 
   function ensureLayout() {
     if (!measure()) return false;
-    const key = rect.width + 'x' + rect.height;
+    const key = rect.width + 'x' + rect.height + ':' + titleBottom;
     if (key !== layoutKey || !layout) {
       layout = computeLayout(rect.width, rect.height);
       if (!animGlass) {
@@ -220,7 +275,7 @@ export function createStartScreen(opts) {
     return THEME_ORDER[activeIndex];
   }
 
-  function drawNebula(g) {
+  function drawNebula(g, now) {
     const W = rect.width;
     const H = rect.height;
 
@@ -239,6 +294,66 @@ export function createStartScreen(opts) {
     core.addColorStop(1, 'rgba(60, 70, 160, 0)');
     g.fillStyle = core;
     g.fillRect(0, 0, W, H);
+
+    // 2b. Две медленно дрейфующие туманности — розовая слева сверху, голубая справа снизу.
+    const clouds = [
+      { x: W * (0.2 + Math.sin(now * 0.00007) * 0.05), y: H * (0.3 + Math.cos(now * 0.00005) * 0.04), rad: Math.max(W, H) * 0.42, color: '255, 51, 153', a: 0.1 },
+      { x: W * (0.8 + Math.cos(now * 0.00006) * 0.05), y: H * (0.64 + Math.sin(now * 0.00008) * 0.04), rad: Math.max(W, H) * 0.46, color: '0, 200, 255', a: 0.09 }
+    ];
+    for (const c of clouds) {
+      const cg = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.rad);
+      cg.addColorStop(0, `rgba(${c.color}, ${c.a})`);
+      cg.addColorStop(0.5, `rgba(${c.color}, ${c.a * 0.35})`);
+      cg.addColorStop(1, `rgba(${c.color}, 0)`);
+      g.fillStyle = cg;
+      g.fillRect(0, 0, W, H);
+    }
+
+    // 2c. Звёзды: мерцают и медленно плывут вниз, ближний слой — быстрее (параллакс).
+    g.save();
+    for (const st of layout.stars) {
+      const y = (st.y + now * (st.layer ? 0.009 : 0.004)) % H;
+      const a = (st.layer ? 0.8 : 0.5) * (0.55 + 0.45 * Math.sin(now * st.ts + st.tw));
+      g.fillStyle = st.color;
+      if (st.layer) {
+        g.globalAlpha = a * 0.22;
+        g.beginPath();
+        g.arc(st.x, y, st.r * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = a;
+      g.beginPath();
+      g.arc(st.x, y, st.r, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+
+    // 2d. Падающая звезда раз в ~7 секунд, каждый раз по новой траектории.
+    const period = 7000;
+    const phase = now % period;
+    if (phase < 900) {
+      const idx = Math.floor(now / period);
+      const rnd = (k) => { const v = Math.sin(idx * 91.7 + k * 13.3) * 43758.5; return v - Math.floor(v); };
+      const t = phase / 900;
+      const sx = W * (0.15 + rnd(1) * 0.7);
+      const sy = H * (0.04 + rnd(2) * 0.25);
+      const len = Math.min(W, H) * 0.35;
+      const hx = sx - len * t;
+      const hy = sy + len * 0.45 * t;
+      const tail = g.createLinearGradient(hx, hy, hx + len * 0.35, hy - len * 0.16);
+      const fade = Math.sin(t * Math.PI);
+      tail.addColorStop(0, `rgba(230, 250, 255, ${0.85 * fade})`);
+      tail.addColorStop(1, 'rgba(230, 250, 255, 0)');
+      g.save();
+      g.strokeStyle = tail;
+      g.lineWidth = 1.6;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(hx, hy);
+      g.lineTo(hx + len * 0.35, hy - len * 0.16);
+      g.stroke();
+      g.restore();
+    }
 
     // 3. Мягкая виньетка по краям — держит фокус на панелях.
     const vig = g.createRadialGradient(W * 0.5, H * 0.45, W * 0.3, W * 0.5, H * 0.5, W * 0.95);
@@ -317,11 +432,7 @@ export function createStartScreen(opts) {
     // base cubes
     b.cubes.forEach((c, i) => {
       const bob = Math.sin(now * 0.002 + i * 1.3) * c.r * 0.1;
-      g.save();
-      g.shadowColor = 'rgba(0, 243, 255, 0.35)';
-      g.shadowBlur = 6;
-      draw({ ...c, level: i + 1, unlocked: true, y: c.y + bob }, now);
-      g.restore();
+      drawSprite(g, { ...c, level: i + 1 }, c.y + bob, 1);
     });
   }
 
@@ -354,6 +465,107 @@ export function createStartScreen(opts) {
     } else {
       g.arc(0, 0, r, 0, Math.PI * 2);
     }
+  }
+
+  // Силуэт закрытого слайма: рисуем настоящую модельку во временный холст,
+  // отрезаем по альфе свечения/ореолы и заливаем тёмным. Кешируется на слот.
+  function silhouetteOf(slot) {
+    if (!drawOn) return null;
+    const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
+    const key = `${slot.themeId}:${slot.level}:${slot.r}:${dpr}`;
+    if (silhouetteCache.has(key)) return silhouetteCache.get(key);
+    let sil = null;
+    try {
+      const half = Math.ceil(slot.r * 1.9);
+      const size = Math.ceil(half * 2 * dpr);
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const og = c.getContext('2d', { willReadFrequently: true });
+      og.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawOn(og, { ...slot, x: half, y: half, unlocked: true }, 0);
+      const img = og.getImageData(0, 0, size, size);
+      const d = img.data;
+      // Оставляем ~15% яркости оригинала: мордочка угадывается «в тени», но не раскрывается
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3];
+        const lum = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) * 0.15;
+        d[i] = 9 + lum;
+        d[i + 1] = 12 + lum;
+        d[i + 2] = 28 + lum;
+        d[i + 3] = a <= 90 ? 0 : a >= 150 ? 255 : Math.round((a - 90) / 60 * 255);
+      }
+      og.putImageData(img, 0, 0);
+      // Неоновый контур запекаем один раз: живой shadowBlur на каждом кадре — самое дорогое в canvas
+      const pad = 12;
+      const outHalf = half + pad;
+      const out = document.createElement('canvas');
+      out.width = Math.ceil(outHalf * 2 * dpr);
+      out.height = out.width;
+      const gg = out.getContext('2d');
+      gg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      quality.bake(() => {
+        gg.shadowColor = withAlpha(THEMES[slot.themeId] ? THEMES[slot.themeId].accent : '#ffffff', 0.95);
+        gg.shadowBlur = 10;
+        gg.drawImage(c, pad, pad, half * 2, half * 2);
+      });
+      sil = { canvas: out, half: outHalf };
+    } catch (err) {
+      sil = null;
+    }
+    silhouetteCache.set(key, sil);
+    return sil;
+  }
+
+  // Готовый спрайт слайма со свечением: рисуется один раз, дальше только drawImage
+  function spriteOf(slot) {
+    const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
+    const key = `${slot.themeId || 'base'}:${slot.level}:${slot.r}:${dpr}`;
+    if (spriteCache.has(key)) return spriteCache.get(key);
+    let spr = null;
+    try {
+      const half = Math.ceil(slot.r * 2.2);
+      const c = document.createElement('canvas');
+      c.width = Math.ceil(half * 2 * dpr);
+      c.height = c.width;
+      const og = c.getContext('2d');
+      og.setTransform(dpr, 0, 0, dpr, 0, 0);
+      quality.bake(() => drawOn(og, { ...slot, x: half, y: half, unlocked: true }, 0, 0.6));
+      spr = { canvas: c, half };
+    } catch (err) {
+      spr = null;
+    }
+    spriteCache.set(key, spr);
+    return spr;
+  }
+
+  function drawSprite(g, slot, y, alpha) {
+    const spr = drawOn ? spriteOf(slot) : null;
+    if (!spr) {
+      g.save();
+      g.globalAlpha *= alpha;
+      draw({ ...slot, unlocked: true, y }, performance.now());
+      g.restore();
+      return;
+    }
+    g.save();
+    g.globalAlpha *= alpha;
+    g.drawImage(spr.canvas, slot.x - spr.half, y - spr.half, spr.half * 2, spr.half * 2);
+    g.restore();
+  }
+
+  function drawSlimeSilhouette(g, pod, slot, isActive, now) {
+    const sil = silhouetteOf(slot);
+    if (!sil) return false;
+    const bob = Math.sin(now * 0.0018 + slot.level * 1.7) * slot.r * 0.06;
+    const pulse = 0.75 + 0.25 * Math.sin(now * 0.0025 + slot.level);
+    g.save();
+    g.globalAlpha = (isActive ? 1 : 0.7) * (0.8 + 0.2 * pulse);
+    const s = sil.half * 2;
+    g.drawImage(sil.canvas, slot.x - sil.half, slot.y - sil.half + bob, s, s);
+    g.restore();
+    text(g, '?', slot.x, slot.y + bob + slot.r * 0.05, Math.max(9, slot.r * 0.62), withAlpha(pod.accent, 0.75), null, isActive ? 0.9 : 0.55);
+    return true;
   }
 
 function drawBlackSilhouette(g, pod, slot, alpha, now = performance.now()) {
@@ -511,25 +723,26 @@ function drawPod(g, pod, now) {
     g.fillStyle = inner;
     g.fillRect(px, py, pw, ph);
 
-    // 3. Отрисовка слаймов с УМЕНЬШЕННЫМ (более аккуратным) свечением
-   pod.slots.forEach(slot => {
+    // 3. Заряд батарейки и тропинка между слотами — под слаймами
+    drawPodCharge(g, pod, isActive, now, px, py, pw, pb);
+    drawPodPath(g, pod, isActive);
+
+    // 4. Слаймы
+    pod.slots.forEach(slot => {
       const open = pod.unlocked && slot.level <= pod.maxLv;
-      if (open && isActive) {
+      if (open && isActive && !quality.low) {
+        // Активная капсула рисуется вживую — крылья машут, эмодзи моргают
         const bob = Math.sin(now * 0.0022 + slot.level * 1.3) * slot.r * 0.12;
         g.save();
         g.shadowColor = pod.accentGlow;
         g.shadowBlur = 4;
         draw({ ...slot, unlocked: true, y: slot.y + bob }, now);
         g.restore();
-      } else if (open && !isActive) {
-        const bob = Math.sin(now * 0.0022 + slot.level * 1.3) * slot.r * 0.1;
-        g.save();
-        g.globalAlpha = 0.75; // Чуть приподняли прозрачность (было 0.6), чтобы они выглядели сочнее
-        g.shadowColor = pod.accentGlow;
-        g.shadowBlur = 3; 
-        draw({ ...slot, unlocked: true, y: slot.y + bob }, now);
-        g.restore();
-      } else {
+      } else if (open) {
+        // Остальные — готовым спрайтом: на замерах полная перерисовка всех капсул роняла FPS вдвое
+        const bob = Math.sin(now * 0.0022 + slot.level * 1.3) * slot.r * (isActive ? 0.12 : 0.1);
+        drawSprite(g, slot, slot.y + bob, isActive ? 1 : 0.75);
+      } else if (!drawSlimeSilhouette(g, pod, slot, isActive, now)) {
         drawBlackSilhouette(g, pod, slot, isActive ? 0.85 : 0.45, now);
       }
     });
@@ -551,9 +764,9 @@ function drawPod(g, pod, now) {
       g.fillRect(px, py, pw, ph);
     }
 
-    // Заблокированные карточки
+    // Закрытые карточки — заметно темнее: силуэты угадываются, но видно, что заперто
     if (!pod.unlocked) {
-      g.fillStyle = 'rgba(0, 0, 0, 0.42)';
+      g.fillStyle = 'rgba(2, 3, 12, 0.46)';
       g.fillRect(px, py, pw, ph);
     }
     g.restore();
@@ -620,18 +833,10 @@ function drawPod(g, pod, now) {
     g.fillText(pod.icon || '', pod.cx, pod.podTop + pod.headerH * 0.42);
     g.restore();
 
-    if (!pod.unlocked) {
-      g.save();
-      g.globalAlpha = 0.9;
-      g.font = `${clamp(11, rect.width * 0.024, 16)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText('🔒', pod.cx + hw - 16, pod.podTop + pod.headerH * 0.42);
-      g.restore();
-    } else {
+    if (pod.unlocked) {
       text(
         g,
-        pod.maxLv + '/' + pod.slotCount,
+        pod.slots.filter(sl => sl.level <= pod.maxLv).length + '/' + pod.slotCount,
         pod.cx + hw - 22,
         pod.podTop + pod.headerH * 0.42,
         clamp(8, rect.width * 0.018, 12),
@@ -641,6 +846,250 @@ function drawPod(g, pod, now) {
       );
     }
 
+    drawPodFooter(g, pod, isActive);
+    if (!pod.unlocked) drawPodLock(g, pod, isActive, now);
+
+    g.restore();
+  }
+
+  // Насколько близко открытие мира: считаем слаймы коллекции, а не номера уровней
+  function unlockProgress(req) {
+    const levels = Object.keys(collectionLevels(req.themeId)).map(Number);
+    const have = progress.isThemeUnlocked(req.themeId) ? progress.getThemeMaxLevel(req.themeId) : 0;
+    const need = levels.filter(l => l <= req.requiredLevel).length;
+    const got = levels.filter(l => l <= Math.min(have, req.requiredLevel)).length;
+    return need > 0 ? clamp(0, got / need, 1) : 0;
+  }
+
+  // Большой навесной замок в центре закрытой капсулы, вокруг — кольцо прогресса до открытия
+  function drawPodLock(g, pod, isActive, now) {
+    const req = THEMES[pod.id].unlockRequirement;
+    const frac = req ? unlockProgress(req) : 0;
+    const R = clamp(26, pod.podW * 0.26, 46);
+    const cx = pod.cx;
+    const cy = pod.podTop + pod.headerH + (pod.podBottom - pod.footerH - pod.podTop - pod.headerH) * 0.45;
+
+    // Раз в несколько секунд замок чуть покачивается; по тапу — трясётся как запертая дверь
+    const shakeT = lockShakeAt[pod.id] ? (now - lockShakeAt[pod.id]) / 520 : 2;
+    const shake = shakeT < 1 ? Math.sin(shakeT * Math.PI * 7) * (1 - shakeT) * 0.28 : 0;
+    const idleCycle = ((now * 0.001 + pod.cx * 0.01) % 5) / 5;
+    const idle = idleCycle > 0.9 ? Math.sin((idleCycle - 0.9) / 0.1 * Math.PI * 3) * 0.06 : 0;
+
+    g.save();
+    g.translate(cx, cy);
+
+    // стеклянный диск
+    const disc = g.createRadialGradient(0, -R * 0.3, R * 0.1, 0, 0, R);
+    disc.addColorStop(0, 'rgba(40, 46, 86, 0.95)');
+    disc.addColorStop(1, 'rgba(8, 10, 26, 0.95)');
+    g.fillStyle = disc;
+    g.beginPath();
+    g.arc(0, 0, R, 0, Math.PI * 2);
+    g.fill();
+
+    // кольцо прогресса: фон и заполненная часть
+    const ringR = R - 3;
+    g.lineCap = 'round';
+    g.lineWidth = 3.5;
+    g.strokeStyle = withAlpha(pod.accent, 0.16);
+    g.beginPath();
+    g.arc(0, 0, ringR, 0, Math.PI * 2);
+    g.stroke();
+    if (frac > 0) {
+      g.save();
+      g.strokeStyle = pod.accent;
+      g.shadowColor = pod.accent;
+      g.shadowBlur = isActive ? 10 : 5;
+      g.beginPath();
+      g.arc(0, 0, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+      g.stroke();
+      g.restore();
+    }
+
+    // сам замок — качается вокруг дужки
+    g.rotate(shake + idle);
+    const bw = R * 0.92;
+    const bh = R * 0.72;
+    const by = -R * 0.12;
+    // дужка
+    g.lineWidth = R * 0.14;
+    g.strokeStyle = 'rgba(205, 215, 240, 0.95)';
+    g.beginPath();
+    g.moveTo(-bw * 0.3, by + 1);
+    g.lineTo(-bw * 0.3, by - bh * 0.3);
+    g.arc(0, by - bh * 0.3, bw * 0.3, Math.PI, 0);
+    g.lineTo(bw * 0.3, by + 1);
+    g.stroke();
+    // корпус
+    const body = g.createLinearGradient(0, by, 0, by + bh);
+    body.addColorStop(0, '#f3f6ff');
+    body.addColorStop(1, withAlpha(pod.accent, 0.95));
+    g.save();
+    g.shadowColor = withAlpha(pod.accent, 0.8);
+    g.shadowBlur = isActive ? 14 : 7;
+    roundRectPath(g, -bw / 2, by, bw, bh, R * 0.14);
+    g.fillStyle = body;
+    g.fill();
+    g.restore();
+    // замочная скважина
+    g.fillStyle = 'rgba(10, 12, 30, 0.85)';
+    g.beginPath();
+    g.arc(0, by + bh * 0.4, R * 0.1, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(-R * 0.05, by + bh * 0.42);
+    g.lineTo(R * 0.05, by + bh * 0.42);
+    g.lineTo(R * 0.035, by + bh * 0.74);
+    g.lineTo(-R * 0.035, by + bh * 0.74);
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+
+  // Индекс самого высокого открытого слота (−1 — ничего не открыто)
+  function openIndex(pod) {
+    if (!pod.unlocked) return -1;
+    let k = -1;
+    pod.slots.forEach((sl, i) => { if (sl.level <= pod.maxLv) k = i; });
+    return k;
+  }
+
+  // Жидкость цвета мира поднимается до последнего открытого слайма:
+  // волнистая поверхность и пузырьки — прогресс виден издалека
+  function drawPodCharge(g, pod, isActive, now, px, py, pw, pb) {
+    const k = openIndex(pod);
+    if (k < 0) return;
+    const top = k === pod.slots.length - 1
+      ? py + pod.headerH
+      : pod.slots[k].y - pod.slots[k].r - 8;
+    const amp = 3;
+    const t = now * 0.002;
+    const surface = x => top + Math.sin(x * 0.06 + t) * amp + Math.sin(x * 0.11 - t * 1.3) * amp * 0.5;
+
+    g.save();
+    g.beginPath();
+    g.moveTo(px, pb);
+    for (let x = px; x <= px + pw; x += 6) g.lineTo(x, surface(x));
+    g.lineTo(px + pw, surface(px + pw));
+    g.lineTo(px + pw, pb);
+    g.closePath();
+    const fill = g.createLinearGradient(0, top, 0, pb);
+    fill.addColorStop(0, withAlpha(pod.accent, isActive ? 0.2 : 0.11));
+    fill.addColorStop(1, withAlpha(pod.accent, isActive ? 0.34 : 0.18));
+    g.fillStyle = fill;
+    g.fill();
+
+    // светящаяся кромка поверхности
+    g.beginPath();
+    for (let x = px; x <= px + pw; x += 6) {
+      if (x === px) g.moveTo(x, surface(x));
+      else g.lineTo(x, surface(x));
+    }
+    g.strokeStyle = withAlpha(pod.accent, isActive ? 0.75 : 0.4);
+    g.lineWidth = 1.5;
+    g.stroke();
+
+    // пузырьки поднимаются со дна к поверхности
+    const depth = pb - top;
+    if (depth > 20) {
+      for (let i = 0; i < 7; i++) {
+        const speed = 0.018 + (i % 3) * 0.008;
+        const y = pb - ((now * speed + i * 83) % depth);
+        const x = px + pw * (0.14 + ((i * 0.37) % 1) * 0.72) + Math.sin(now * 0.003 + i) * 3;
+        g.beginPath();
+        g.arc(x, y, 1.4 + (i % 3) * 0.7, 0, Math.PI * 2);
+        g.fillStyle = withAlpha('#ffffff', isActive ? 0.35 : 0.18);
+        g.fill();
+      }
+    }
+    g.restore();
+  }
+
+  // Тропинка через все слоты: пройденная часть светится, дальше — пунктир
+  function drawPodPath(g, pod, isActive) {
+    const pts = pod.slots;
+    if (pts.length < 2) return;
+    const trace = (from, to) => {
+      g.beginPath();
+      g.moveTo(pts[from].x, pts[from].y);
+      for (let i = from + 1; i <= to; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const my = (a.y + b.y) / 2;
+        g.bezierCurveTo(a.x, my, b.x, my, b.x, b.y);
+      }
+    };
+    g.save();
+    g.lineCap = 'round';
+    g.setLineDash([3, 6]);
+    g.strokeStyle = withAlpha(pod.accent, isActive ? 0.3 : 0.16);
+    g.lineWidth = 2;
+    trace(0, pts.length - 1);
+    g.stroke();
+    g.setLineDash([]);
+    const k = openIndex(pod);
+    if (k >= 1) {
+      g.strokeStyle = withAlpha(pod.accent, isActive ? 0.22 : 0.12);
+      g.lineWidth = 7;
+      trace(0, k);
+      g.stroke();
+      g.strokeStyle = withAlpha(pod.accent, isActive ? 0.9 : 0.5);
+      g.lineWidth = 2.2;
+      trace(0, k);
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  // Подпись капсулы: название мира, а у закрытых — какой слайм нужен и сколько осталось
+  function drawPodFooter(g, pod, isActive) {
+    const hw = pod.podW / 2;
+    const maxW = pod.podW - 16;
+    const top = pod.podBottom - pod.footerH;
+    const req = pod.unlocked ? null : THEMES[pod.id].unlockRequirement;
+    const titleSize = fitFontSize(g, pod.title, maxW, clamp(10, rect.width * 0.024, 14), 8, 2.5);
+    const alpha = isActive ? 1 : pod.unlocked ? 0.8 : 0.65;
+
+    g.save();
+    g.strokeStyle = withAlpha(pod.accent, 0.18);
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(pod.cx - hw + 12, top);
+    g.lineTo(pod.cx + hw - 12, top);
+    g.stroke();
+    g.restore();
+
+    if (!req) {
+      text(g, pod.title, pod.cx, top + pod.footerH / 2, titleSize, pod.accent, isActive ? pod.accentGlow : null, alpha, 2.5);
+      return;
+    }
+
+    const target = getSlimeConfig(req.requiredLevel, req.themeId);
+    const need = `${target.name} in ${THEMES[req.themeId].title}`.toUpperCase();
+    const frac = unlockProgress(req);
+    const y1 = top + pod.footerH * 0.27;
+    const y2 = top + pod.footerH * 0.56;
+    const y3 = top + pod.footerH * 0.8;
+
+    text(g, pod.title, pod.cx, y1, titleSize, pod.accent, isActive ? pod.accentGlow : null, alpha, 2.5);
+    const needSize = fitFontSize(g, need, maxW, clamp(8, rect.width * 0.017, 10), 6, 1);
+    text(g, need, pod.cx, y2, needSize, 'rgba(215, 225, 255, 0.85)', null, alpha, 1);
+
+    // Полоска прогресса к нужному слайму
+    const bw = Math.min(maxW, 120);
+    const bh = 3;
+    g.save();
+    g.globalAlpha = alpha;
+    roundRectPath(g, pod.cx - bw / 2, y3 - bh / 2, bw, bh, bh / 2);
+    g.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    g.fill();
+    if (frac > 0) {
+      roundRectPath(g, pod.cx - bw / 2, y3 - bh / 2, Math.max(bh, bw * frac), bh, bh / 2);
+      g.fillStyle = pod.accent;
+      g.shadowColor = pod.accentGlow;
+      g.shadowBlur = 6;
+      g.fill();
+    }
     g.restore();
   }
 
@@ -651,6 +1100,8 @@ function drawPod(g, pod, now) {
       return;
     }
     const now = performance.now();
+    if (lastFrameAt) quality.sample(now - lastFrameAt);
+    lastFrameAt = now;
 
     // animate glass / pop
     const target = selectedThemeId();
@@ -663,7 +1114,7 @@ function drawPod(g, pod, now) {
     });
 
     ctx.clearRect(0, 0, rect.width, rect.height);
-    drawNebula(ctx);
+    drawNebula(ctx, now);
     drawPyramid(ctx, now);
     drawBalanceLine(ctx);
     layout.pods.forEach(p => drawPod(ctx, p, now));
@@ -672,9 +1123,24 @@ function drawPod(g, pod, now) {
   }
 
   function updateLabels() {
-    const t = THEMES[selectedThemeId()];
-    if (selectedLabelEl) selectedLabelEl.textContent = t ? podDisplay(selectedThemeId()).title : '';
-    if (recordLabelEl) recordLabelEl.textContent = 'Record: ' + progress.getHighScore(selectedThemeId()).toLocaleString();
+    const id = selectedThemeId();
+    const t = THEMES[id];
+    const unlocked = progress.isThemeUnlocked(id);
+    if (selectedLabelEl) selectedLabelEl.textContent = t ? podDisplay(id).title : '';
+    if (recordLabelEl) {
+      const req = t && t.unlockRequirement;
+      recordLabelEl.textContent = unlocked || !req
+        ? 'Record: ' + progress.getHighScore(id).toLocaleString()
+        : `Get ${getSlimeConfig(req.requiredLevel, req.themeId).name} in ${THEMES[req.themeId].title} to unlock`;
+    }
+    if (playBtn) {
+      // Закрытый мир — кнопка честно говорит об этом, а не молча показывает подсказку по тапу
+      playBtn.classList.toggle('locked', !unlocked);
+      playBtn.innerHTML = unlocked
+        ? '<svg class="start-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg><span>PLAY</span>'
+        : '<svg class="start-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7.5a5 5 0 0 1 10 0V11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="9.5" rx="2.4" fill="currentColor"/></svg><span>LOCKED</span>';
+      playBtn.setAttribute('aria-label', unlocked ? 'Play' : 'Locked world');
+    }
   }
 
   function showTooltipNear(textStr) {
@@ -715,6 +1181,7 @@ function drawPod(g, pod, now) {
         y >= p.capY0 - 8 && y <= p.podBottom + 4;
       if (hit) {
         select(i);
+        if (!p.unlocked) lockShakeAt[p.id] = performance.now();
         break;
       }
     }
@@ -726,7 +1193,8 @@ function drawPod(g, pod, now) {
     if (!pod || !rect) return;
     if (!pod.unlocked) {
       const req = THEMES[pod.id].unlockRequirement;
-      showTooltipNear(req ? `Reach level ${req.requiredLevel} in ${THEMES[req.themeId].title}` : 'World is locked');
+      lockShakeAt[pod.id] = performance.now();
+      showTooltipNear(req ? `Get ${getSlimeConfig(req.requiredLevel, req.themeId).name} in ${THEMES[req.themeId].title} to unlock` : 'World is locked');
       return;
     }
     if (!pod.playable) {

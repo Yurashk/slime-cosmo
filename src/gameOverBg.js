@@ -1,3 +1,5 @@
+import { quality } from './quality.js';
+
 const TAU = Math.PI * 2;
 
 function rgba(hex, a) {
@@ -98,7 +100,7 @@ export function createGameOverBg(canvas, getBox) {
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
     w = Math.max(1, rect.width);
     h = Math.max(1, rect.height);
     canvas.width = Math.round(w * dpr);
