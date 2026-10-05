@@ -10,6 +10,7 @@ class SlimeSfx {
     this.noiseBuf = null;
     this.unlocked = false;
     this.muted = false;
+    this.adMuted = false;
     this.last = { key: '', t: 0, f: 1 };
     this.mergeSample = null;
     this._samplesLoading = null;
@@ -27,7 +28,7 @@ class SlimeSfx {
         if (!this.ctx) return;
         if (document.hidden) {
           this.ctx.suspend().catch(() => {});
-        } else if (this.ctx.state === 'suspended' && this.unlocked) {
+        } else if (this.ctx.state === 'suspended' && this.unlocked && !this.adMuted) {
           this.ctx.resume().catch(() => {});
         }
       });
@@ -41,6 +42,14 @@ class SlimeSfx {
 
   isMuted() {
     return this.muted;
+  }
+
+  // Тишина на время рекламного ролика: глушим и уже звучащее, выбор игрока не сохраняем
+  setAdMuted(m) {
+    this.adMuted = !!m;
+    if (!this.ctx) return;
+    if (this.adMuted) this.ctx.suspend().catch(() => {});
+    else if (this.unlocked && !(typeof document !== 'undefined' && document.hidden)) this.ctx.resume().catch(() => {});
   }
 
   unlock() {
@@ -127,7 +136,7 @@ class SlimeSfx {
   }
 
   _ready() {
-    if (!this.unlocked || this.muted) return false;
+    if (!this.unlocked || this.muted || this.adMuted) return false;
     if (typeof document !== 'undefined' && document.hidden) return false;
     return !!this._ensure();
   }

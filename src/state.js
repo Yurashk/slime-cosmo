@@ -34,7 +34,9 @@ export const progress = {
     const theme = THEMES[themeId];
     if (!theme || !theme.unlockRequirement) return true;
     const req = theme.unlockRequirement;
-    return state.unlockedSlimes.includes(entityIdOf(req.themeId, req.requiredLevel));
+    if (state.unlockedSlimes.includes(entityIdOf(req.themeId, req.requiredLevel))) return true;
+    // Мир, в котором игрок уже что-то открыл, остаётся открытым, даже если цепочка открытия поменялась
+    return state.unlockedSlimes.some(id => id.startsWith(themeId + ':'));
   },
 
   getHighScore(themeId) {

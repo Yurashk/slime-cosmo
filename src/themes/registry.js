@@ -32,7 +32,7 @@ export const THEMES = {
     accent: '#46ff9a',
     accentGlow: 'rgba(80, 255, 150, 0.45)',
     lockShape: 'animal',
-    unlockRequirement: { themeId: 'space', requiredLevel: 8 },
+    unlockRequirement: { themeId: 'ocean', requiredLevel: 8 },
     playable: true,
     bowl: {
       theme: 'meadow',
@@ -56,7 +56,7 @@ export const THEMES = {
     accent: '#45ccff',
     accentGlow: 'rgba(70, 190, 255, 0.45)',
     lockShape: 'emoji',
-    unlockRequirement: { themeId: 'animals', requiredLevel: 8 },
+    unlockRequirement: { themeId: 'space', requiredLevel: 8 },
     playable: true,
     bowl: {
       theme: 'ocean',
@@ -81,7 +81,8 @@ export function bowlStyle(themeId) {
   return t && t.bowl ? t.bowl : THEMES.space.bowl;
 }
 
-export const THEME_ORDER = ['space', 'animals', 'ocean'];
+// Порядок миров: Space → Emoji (внутри — ocean) → Animals; открываются по цепочке
+export const THEME_ORDER = ['space', 'ocean', 'animals'];
 
 export function themeSlimeLevels(themeId) {
   return Array.from({ length: THEME_SLIME_COUNT }, (_, i) => THEME_BASE_FROM + i);

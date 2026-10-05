@@ -154,7 +154,11 @@ body::before {
   animation: slide-up 0.6s ease-out;
 }
 
+/* Холст вынут из потока и просто заполняет обёртку. Иначе его собственный размер
+   (атрибуты width/height) распирает обёртку, и поле не может уменьшиться вслед за окном. */
 #game-canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -306,6 +310,14 @@ body::before {
   transform: rotate(180deg) scale(0.94);
 }
 
+.menu-btn:hover {
+  transform: translateY(-1px);
+}
+
+.menu-btn:active {
+  transform: scale(0.94);
+}
+
 .hud-actions {
   display: flex;
   align-items: center;
@@ -314,8 +326,8 @@ body::before {
 }
 
 .lb-toggle {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -718,83 +730,87 @@ body::before {
   text-shadow: 0 0 12px rgba(var(--go-accent-rgb), 0.8);
 }
 
+/* Кнопки экрана проигрыша — в стиле кнопки PLAY на главном экране:
+   объёмные «конфетные» с кромкой снизу, округлый шрифт Fredoka */
 .btn-play-again {
   position: relative;
-  overflow: hidden;
   display: block;
   width: 100%;
-  padding: 14px 24px;
-  font-size: clamp(13px, 2.4vw, 15px);
-  font-weight: 800;
-  letter-spacing: 0.22em;
+  padding: 10px 24px 12px;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: clamp(20px, 5.4vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #fff;
-  background: linear-gradient(100deg, #00E8FF 0%, #1B7BFF 55%, #2B3BE0 100%);
-  border: 1px solid rgba(120, 240, 255, 0.55);
+  background: linear-gradient(180deg, #c4ff72 0%, #45e486 50%, #14b88f 100%);
+  border: 3px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
   cursor: pointer;
   box-shadow:
-    0 0 14px rgba(0, 170, 255, 0.55),
-    0 0 40px rgba(0, 170, 255, 0.3);
-  transition: all 0.2s ease;
-  animation: go-rise 0.45s ease-out 0.95s both;
-}
-
-/* Блик пробегает по кнопке — взгляд сам тянется к «сыграть ещё» */
-.btn-play-again::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
-  transform: skewX(-18deg);
-  animation: go-shine 2.8s ease-in-out 1.6s infinite;
-  pointer-events: none;
+    0 5px 0 #0b6b4a,
+    0 12px 22px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 2px 0 rgba(6, 70, 46, 0.7);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  /* сначала появляется вместе с карточкой, потом мягко пульсирует */
+  animation:
+    go-rise 0.45s ease-out 0.95s both,
+    start-play-pulse 2s ease-in-out 1.8s infinite;
 }
 
 .btn-play-again:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
+  filter: brightness(1.06);
   box-shadow:
-    0 0 24px rgba(0, 170, 255, 0.85),
-    0 0 60px rgba(0, 170, 255, 0.45);
+    0 5px 0 #0b6b4a,
+    0 14px 26px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(80, 255, 160, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
 }
 
 .btn-play-again:active {
-  transform: translateY(1px) scale(0.97);
+  animation: none;
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #0b6b4a,
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
 }
 
 .btn-back-to-menu {
   display: block;
   width: 100%;
-  margin-top: 10px;
-  padding: 10px 24px;
-  font-size: clamp(10px, 1.9vw, 12px);
+  margin-top: 14px;
+  padding: 8px 24px 9px;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: clamp(14px, 3.8vw, 16px);
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(185, 212, 255, 0.78);
-  background: linear-gradient(160deg, rgba(22, 34, 78, 0.55), rgba(9, 11, 28, 0.6));
-  border: 1px solid rgba(120, 240, 255, 0.28);
+  color: rgba(220, 228, 255, 0.9);
+  background: linear-gradient(180deg, rgba(74, 82, 128, 0.95), rgba(36, 40, 72, 0.98));
+  border: 2px solid rgba(170, 185, 230, 0.22);
   border-radius: 999px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 10px rgba(80, 200, 255, 0.12);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
+  box-shadow:
+    0 4px 0 #161a34,
+    0 10px 18px rgba(0, 0, 0, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  animation: go-rise 0.45s ease-out 1.05s both;
 }
 
 .btn-back-to-menu:hover {
-  color: #e2f7ff;
-  border-color: rgba(0, 232, 255, 0.55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 18px rgba(0, 232, 255, 0.35);
-  transform: translateY(-1px);
+  filter: brightness(1.12);
 }
 
 .btn-back-to-menu:active {
-  transform: translateY(0px) scale(0.97);
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #161a34,
+    0 5px 10px rgba(0, 0, 0, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14);
 }
 
 /* ── Лента коллекции: открытые в цвете, следующий к открытию пульсирует ── */
@@ -1030,13 +1046,13 @@ body::before {
     gap: 2px;
   }
   .restart-btn {
-    width: 26px;
-    height: 26px;
-    font-size: 12px;
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
   }
   .lb-toggle {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     font-size: 7px;
   }
   .hud-actions {
@@ -1076,6 +1092,10 @@ body::before {
   .game-main {
     display: grid;
     grid-template-columns: 210px minmax(0, 1fr) 210px;
+    /* Строка ровно в высоту окна: без minmax(0, …) её распирает содержимое панелей,
+       и при уменьшении окна поле остаётся старой высоты и уезжает за экран */
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
     gap: clamp(12px, 1.8vw, 22px);
     align-items: stretch;
     padding: clamp(12px, 2vh, 20px);
@@ -1143,6 +1163,14 @@ body::before {
     flex: 1;
     min-height: 0;
     padding: 0 0 6px;
+  }
+
+  /* Как и игровой холст: вне потока, чтобы атрибуты width/height не держали высоту панели */
+  .side-panel--collection #collection-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: calc(100% - 6px);
   }
 
   .side-panel--leaderboard {
@@ -1335,9 +1363,21 @@ body::before {
   text-align: right;
 }
 
-.lb-row:nth-child(1) .lb-place { color: #ffd700; text-shadow: 0 0 6px rgba(255, 215, 0, 0.5); }
-.lb-row:nth-child(2) .lb-place { color: #c8d6e5; text-shadow: 0 0 6px rgba(200, 214, 229, 0.4); }
-.lb-row:nth-child(3) .lb-place { color: #d8926a; text-shadow: 0 0 6px rgba(216, 146, 106, 0.4); }
+/* Медали первой тройки — только в самом топе, не в «твоей зоне» */
+.lb-rows .lb-row:nth-child(-n+3) .lb-place {
+  min-width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  font-size: 0.86em;
+  line-height: 15px;
+  text-align: center;
+  color: #1a1206;
+  align-self: center;
+}
+.lb-rows .lb-row:nth-child(1) .lb-place { background: linear-gradient(160deg, #fff3a6, #ffc400); box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
+.lb-rows .lb-row:nth-child(2) .lb-place { background: linear-gradient(160deg, #f4f8fc, #a9b8c8); box-shadow: 0 0 8px rgba(200, 214, 229, 0.45); }
+.lb-rows .lb-row:nth-child(3) .lb-place { background: linear-gradient(160deg, #f3c3a3, #c9773f); box-shadow: 0 0 8px rgba(216, 146, 106, 0.45); }
+.lb-rows .lb-row:nth-child(1) .lb-name { color: #ffe9a0; }
 
 .lb-name {
   flex: 1;
@@ -1364,6 +1404,83 @@ body::before {
 .lb-row.lb-me-highlight .lb-place,
 .lb-row.lb-me-highlight .lb-name {
   color: #ffe28a;
+}
+
+/* Своё имя — кнопка переименования */
+.lb-name-edit {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.lb-pencil {
+  flex: none;
+  font-size: 0.9em;
+  opacity: 0.6;
+}
+
+.lb-name-edit:hover .lb-pencil {
+  opacity: 1;
+}
+
+.lb-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+  font: inherit;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 226, 138, 0.7);
+  border-radius: 4px;
+  outline: none;
+}
+
+/* «Твоя зона»: соседи по таблице вокруг игрока */
+.lb-zone {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(150, 210, 255, 0.25);
+}
+
+.lb-zone-title {
+  margin-bottom: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: rgba(160, 200, 235, 0.6);
+}
+
+.lb-zone-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lb-zone .lb-place {
+  min-width: 26px;
+}
+
+/* Ближайшая цель: сколько очков до следующего места */
+.lb-goal {
+  margin-top: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: #c9ffe0;
+  background: rgba(40, 220, 140, 0.1);
+  border: 1px solid rgba(90, 240, 170, 0.35);
 }
 
 .lb-me {
@@ -1711,56 +1828,6 @@ body::before {
   box-shadow: 0 0 9px rgba(160, 90, 255, 0.75);
 }
 
-.ad-content {
-  max-width: 320px;
-}
-
-.ad-title {
-  font-size: clamp(18px, 4vw, 26px);
-}
-
-.ad-message {
-  min-height: 18px;
-  margin: 14px 0 10px;
-  font-size: clamp(12px, 2.4vw, 14px);
-  color: rgba(205, 242, 255, 0.9);
-  letter-spacing: 0.06em;
-}
-
-.ad-progress {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(150, 210, 255, 0.22);
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.ad-progress span {
-  display: block;
-  height: 100%;
-  width: 0%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--neon-cyan, #00e5ff), var(--neon-green, #14ff62));
-  box-shadow: 0 0 10px rgba(0, 230, 255, 0.6);
-  transition: width 0.12s linear;
-}
-
-.ad-reward {
-  margin: 10px 0 4px;
-  font-size: clamp(14px, 3vw, 18px);
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  color: #d8ffea;
-  text-shadow: 0 0 14px rgba(80, 255, 170, 0.7);
-  animation: glow-pulse 1.2s ease-in-out infinite;
-}
-
-.ad-close {
-  margin-top: 14px;
-  pointer-events: auto;
-}
-
 /* --- Start screen (tree of worlds) --- */
 
 .start-overlay {
@@ -1810,19 +1877,41 @@ body::before {
   pointer-events: none;
 }
 
+/* Логотип: неоновое NEON над мармеладным SLIME с обводкой и объёмом */
 .start-title {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.start-title span {
+  display: block;
+}
+
+.start-title .t-neon {
+  margin-bottom: 2px;
   font-family: 'Orbitron', 'Montserrat', sans-serif;
   font-weight: 900;
-  font-size: clamp(17px, 4.6vw, 28px);
-  letter-spacing: 0.2em;
-  text-indent: 0.2em;
-  background: linear-gradient(92deg, #00E8FF 0%, #7C9BFF 45%, #FF3399 100%);
+  font-size: clamp(11px, 3.2vw, 14px);
+  letter-spacing: 0.62em;
+  text-indent: 0.62em;
+  color: #b6fcff;
+  text-shadow: 0 0 6px #00e8ff, 0 0 16px #00e8ff;
+}
+
+.start-title .t-slime {
+  font-family: 'Lilita One', 'Fredoka', sans-serif;
+  font-weight: 400;
+  font-size: clamp(44px, 14vw, 62px);
+  letter-spacing: 0.03em;
+  background: linear-gradient(180deg, #d4ff7a 0%, #57f58e 42%, #12c9a6 100%);
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 8px rgba(0, 232, 255, 0.5));
-  opacity: 0.96;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 2.5px #063325;
+  filter: drop-shadow(0 4px 0 #04281c) drop-shadow(0 0 16px rgba(80, 255, 160, 0.5));
 }
 
 .start-subtitle {
@@ -1905,92 +1994,83 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-width: min(70vw, 290px);
-  padding: 15px 40px;
+  min-width: min(58vw, 230px);
+  padding: 8px 40px 10px;
   pointer-events: auto;
-  font-family: 'Orbitron', 'Montserrat', sans-serif;
-  font-size: clamp(16px, 4vw, 21px);
-  font-weight: 800;
-  letter-spacing: 0.24em;
-  text-indent: 0.24em;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: clamp(20px, 5.6vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-indent: 0;
   text-transform: uppercase;
   color: #ffffff;
-  border: 1.5px solid rgba(0, 232, 255, 0.75);
+  border: 3px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
-  background: linear-gradient(100deg, #00E8FF 0%, #1B7BFF 55%, #2B3BE0 100%);
+  background: linear-gradient(180deg, #c4ff72 0%, #45e486 50%, #14b88f 100%);
   box-shadow:
-    0 0 16px rgba(0, 232, 255, 0.45),
-    0 0 34px rgba(40, 90, 255, 0.3);
-  text-shadow: 0 1px 2px rgba(4, 20, 60, 0.35);
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+    0 5px 0 #0b6b4a,
+    0 12px 22px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 2px 0 rgba(6, 70, 46, 0.7);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .start-play:hover {
-  transform: translateY(-1px);
+  filter: brightness(1.06);
   box-shadow:
-    0 0 22px rgba(0, 232, 255, 0.7),
-    0 0 48px rgba(40, 90, 255, 0.45);
+    0 5px 0 #0b6b4a,
+    0 14px 26px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(80, 255, 160, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
 }
 
+/* Нажатие: кнопка «проседает» на кромку */
 .start-play:active {
-  transform: translateY(1px) scale(0.97);
+  animation: none;
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #0b6b4a,
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
 }
 
-/* Дыхание свечения — кнопка зовёт нажать, но не мельтешит */
+/* Лёгкая пульсация — кнопка зовёт нажать, но не мельтешит */
 .start-play:not(.locked) {
-  animation: start-play-breathe 2.4s ease-in-out infinite;
+  animation: start-play-pulse 2s ease-in-out infinite;
 }
 
-/* Блик пробегает по кнопке */
-.start-play::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 28%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-  transform: skewX(-18deg);
-  animation: go-shine 3.2s ease-in-out 1s infinite;
-  pointer-events: none;
+/* Общий .neon-btn.large задаёт свои размер и отступы — у кнопки PLAY они свои, крупные */
+.neon-btn.large.start-play {
+  padding: 8px 40px 10px;
+  font-size: clamp(20px, 5.6vw, 24px);
 }
 
 .start-play-icon {
   width: 20px;
   height: 20px;
   flex: none;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
-}
-
-.start-play span {
-  /* компенсируем letter-spacing последней буквы, чтобы текст стоял по центру с иконкой */
-  margin-right: -0.24em;
+  filter: drop-shadow(0 2px 0 rgba(6, 70, 46, 0.7));
 }
 
 .start-play.locked {
   color: rgba(215, 225, 255, 0.8);
-  background: linear-gradient(160deg, rgba(60, 68, 110, 0.75), rgba(22, 26, 52, 0.85));
-  border-color: rgba(170, 185, 230, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 12px rgba(120, 140, 220, 0.2);
-  text-shadow: none;
+  background: linear-gradient(180deg, rgba(74, 82, 128, 0.9), rgba(36, 40, 72, 0.95));
+  border-color: rgba(170, 185, 230, 0.25);
+  box-shadow: 0 6px 0 #1c2040, 0 12px 22px rgba(0, 0, 0, 0.4), inset 0 3px 0 rgba(255, 255, 255, 0.12);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
 }
 
-.start-play.locked::after {
-  display: none;
+.start-play.locked .start-play-icon {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
 }
 
-@keyframes start-play-breathe {
-  0%, 100% {
-    box-shadow: 0 0 16px rgba(0, 232, 255, 0.45), 0 0 34px rgba(40, 90, 255, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 26px rgba(0, 232, 255, 0.75), 0 0 56px rgba(40, 90, 255, 0.5);
-  }
+@keyframes start-play-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .start-play,
-  .start-play::after {
+  .start-play {
     animation: none !important;
   }
 }
@@ -2134,6 +2214,245 @@ body::before {
   animation: fade-in 0.2s ease-out;
 }
 
+/* Меню паузы: сцена просвечивает, чтобы было видно, к чему вернёшься */
+.pause-overlay {
+  background: rgba(4, 5, 14, 0.74);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation-duration: 0.18s;
+}
+
+.pause-content {
+  width: min(88vw, 320px);
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pause-btn {
+  display: block;
+  width: 100%;
+  padding: 9px 24px 10px;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(220, 228, 255, 0.92);
+  background: linear-gradient(180deg, rgba(74, 82, 128, 0.95), rgba(36, 40, 72, 0.98));
+  border: 2px solid rgba(170, 185, 230, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow:
+    0 4px 0 #161a34,
+    0 10px 18px rgba(0, 0, 0, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  touch-action: manipulation;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.pause-btn:hover {
+  filter: brightness(1.12);
+}
+
+.pause-btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #161a34,
+    0 4px 10px rgba(0, 0, 0, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14);
+}
+
+.pause-btn.primary {
+  padding: 10px 24px 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(180deg, #c4ff72 0%, #45e486 50%, #14b88f 100%);
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 5px 0 #0b6b4a,
+    0 12px 22px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 2px 0 rgba(6, 70, 46, 0.7);
+}
+
+.pause-btn.primary:active {
+  box-shadow:
+    0 2px 0 #0b6b4a,
+    0 5px 10px rgba(0, 0, 0, 0.45),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Звук выключен — кнопка приглушена */
+.pause-btn[aria-pressed='false'] {
+  color: rgba(200, 208, 235, 0.55);
+}
+
+@media (max-height: 420px) {
+  .pause-actions {
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .pause-btn,
+  .pause-btn.primary {
+    padding: 6px 20px 7px;
+    font-size: 14px;
+  }
+}
+
+/* Обучение новичка: подсказки поверх поля, игру не перекрывают и не блокируют */
+.coach {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.coach.hidden {
+  display: none;
+}
+
+.coach-card {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 196px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(84%, 300px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  font-family: 'Fredoka', 'Montserrat', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: #eaf6ff;
+  background: rgba(10, 12, 32, 0.82);
+  border: 1px solid rgba(120, 255, 190, 0.45);
+  box-shadow: 0 0 18px rgba(60, 230, 150, 0.22), 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.coach.coach-in .coach-card {
+  animation: coach-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes coach-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* Рука водит под слаймом влево-вправо и «отпускает» его */
+.coach-hand {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 132px);
+  margin-left: -12px;
+  display: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  animation: coach-sweep 2.6s ease-in-out infinite;
+}
+
+.coach[data-step='aim'] .coach-hand {
+  display: block;
+}
+
+@keyframes coach-sweep {
+  0%, 100% { transform: translateX(-70px); }
+  40%, 52% { transform: translateX(70px); }
+  46% { transform: translateX(70px) scale(0.86); }
+}
+
+.coach-demo {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  font-size: 16px;
+  color: rgba(220, 240, 255, 0.8);
+}
+
+.coach[data-step='merge'] .coach-demo {
+  display: flex;
+}
+
+/* Клавиатурная подсказка — только там, где есть мышь/клавиатура */
+.coach-keys {
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(200, 225, 245, 0.8);
+}
+
+@media (hover: hover) {
+  .coach[data-step='aim'] .coach-keys {
+    display: block;
+  }
+}
+
+.coach-keys kbd {
+  display: inline-block;
+  min-width: 20px;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #eaf6ff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(190, 225, 255, 0.4);
+  border-bottom-width: 2px;
+}
+
+.coach-block {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.coach-block.a {
+  background: #00f0ff;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+}
+
+.coach-block.b {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #0dff4f;
+  box-shadow: 0 0 10px rgba(13, 255, 79, 0.7);
+  animation: coach-grow 1.4s ease-in-out infinite;
+}
+
+@keyframes coach-grow {
+  0%, 100% { transform: scale(0.85); }
+  50% { transform: scale(1.12); }
+}
+
+@media (max-height: 520px) {
+  .coach-card {
+    top: calc(env(safe-area-inset-top) + 150px);
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-hand,
+  .coach-block.b {
+    animation: none;
+  }
+}
+
 /* Только что открытый бустер пульсирует, пока его не нажмут */
 .booster-btn.fresh {
   animation: booster-fresh 1.2s ease-in-out infinite;
@@ -2157,7 +2476,7 @@ body::before {
   display: none;
 }
 
-@media (max-height: 700px) {
+@media (max-height: 820px) {
   .game-over-card { padding: 14px 18px 16px; }
   .game-over-title { font-size: 24px; }
   .go-hero, .go-hero-slime { width: 72px; height: 72px; }
@@ -2175,6 +2494,109 @@ body::before {
   .stat-icon svg { width: 15px; height: 15px; }
   .go-collection { margin-bottom: 10px; padding: 8px 10px 6px; }
   .go-collection-hint { display: none; }
-  .btn-play-again { padding: 11px 24px; }
-  .btn-back-to-menu { margin-top: 8px; padding: 8px 24px; }
+  .btn-play-again { padding: 8px 24px 10px; font-size: 20px; }
+  .btn-back-to-menu { margin-top: 10px; padding: 7px 24px 8px; min-height: 36px; font-size: 14px; }
+}
+
+
+/* ── Адаптивность: телефон в горизонтали и мелкие кнопки ── */
+
+/* Кнопки лидерборда остаются аккуратными 24px, но ловят палец в зоне ~40px */
+.lb-close,
+.lb-collapse {
+  position: relative;
+}
+
+.lb-close::before,
+.lb-collapse::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  /* Главный экран: подпись мира и PLAY в одну строку — капсулам остаётся больше высоты */
+  .start-footer {
+    flex-direction: row;
+    justify-content: center;
+    gap: 22px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+  .start-selection {
+    text-align: right;
+  }
+  .neon-btn.large.start-play {
+    min-width: 0;
+    padding: 6px 30px 8px;
+    font-size: 20px;
+  }
+  .start-title .t-neon {
+    font-size: 9px;
+  }
+  .start-title .t-slime {
+    font-size: 32px;
+  }
+
+  /* Экран проигрыша: две колонки — герой и счёт слева, статистика и кнопки справа */
+  .game-over-card {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    column-gap: 18px;
+    align-items: center;
+    width: min(94vw, 720px);
+    padding: 12px 18px;
+  }
+  .game-over-title { font-size: 22px; }
+  .go-hero, .go-hero-slime { width: 64px; height: 64px; }
+  .go-hero-rays { inset: -18px; }
+  .final-score-value { font-size: 30px; }
+  .final-score-container { margin-bottom: 0; }
+  .stats-grid { margin-bottom: 8px; }
+  .go-collection { margin-bottom: 8px; }
+}
+
+
+/* ── Кольцо энергии чёрной дыры: заполняется слияниями, при перезарядке — серое ── */
+.booster-btn.booster-blackhole::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  padding: 3px;
+  border-radius: 15px;
+  background: conic-gradient(#c58cff calc(var(--bh-fill, 0) * 1turn), rgba(200, 170, 255, 0.2) 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(197, 140, 255, 0.6));
+}
+
+.booster-btn.booster-blackhole.locked::before {
+  display: none;
+}
+
+.booster-btn.booster-blackhole.cooling::before {
+  background: conic-gradient(rgba(225, 232, 255, 0.85) calc(var(--bh-fill, 0) * 1turn), rgba(255, 255, 255, 0.14) 0);
+  filter: none;
+}
+
+.booster-btn.booster-blackhole.cooling .booster-icon {
+  opacity: 0.4;
+}
+
+/* Получен заряд — кнопка коротко вспыхивает */
+.booster-btn.gained {
+  animation: booster-gained 0.7s ease-out;
+}
+
+@keyframes booster-gained {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(210, 140, 255, 0); }
+  35% { transform: scale(1.18); box-shadow: 0 0 28px rgba(210, 140, 255, 0.95); }
+  100% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 210, 255, 0.1); }
+}
+
+
+/* Диалог поверх замершей сцены — игрок видит, какой слайм падает */
+#confirm-overlay.see-through {
+  background: rgba(4, 6, 16, 0.45);
 }

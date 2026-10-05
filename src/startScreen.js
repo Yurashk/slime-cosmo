@@ -66,8 +66,11 @@ function withAlpha(hex, a) {
 }
 
 function roundRectPath(g, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
   g.beginPath();
+  // Вырожденный прямоугольник (окно сжали до крошечного) — рисовать нечего,
+  // а отрицательный радиус роняет roundRect с RangeError
+  if (!(w > 0) || !(h > 0)) return;
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   if (g.roundRect) {
     g.roundRect(x, y, w, h, r);
   } else {
@@ -138,6 +141,7 @@ export function createStartScreen(opts) {
   let tooltipTimer = 0;
   let busy = false;
   let titleBottom = 0;
+  let footerTop = 0;
   const silhouetteCache = new Map();
   const spriteCache = new Map();
   // Когда последний раз трясли замок капсулы (тап по закрытому миру)
@@ -151,6 +155,10 @@ export function createStartScreen(opts) {
     const titleEl = document.querySelector('.start-title');
     const tr = titleEl ? titleEl.getBoundingClientRect() : null;
     titleBottom = tr && tr.height > 0 ? Math.round(tr.bottom - r.top) : 0;
+    // Капсулы не должны заезжать под подпись мира и кнопку PLAY
+    const footEl = document.querySelector('.start-footer');
+    const fr = footEl ? footEl.getBoundingClientRect() : null;
+    footerTop = fr && fr.height > 0 ? Math.round(fr.top - r.top) : Math.round(r.height);
     const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
     const w = Math.round(r.width * dpr);
     const h = Math.round(r.height * dpr);
@@ -170,11 +178,21 @@ export function createStartScreen(opts) {
     const capY0 = podTop - capH - 3;
     const headerH = clamp(24, H * 0.032, 30);
     const footerH = clamp(38, H * 0.05, 46);
-    const podBottom = H * 0.82;
+    // Нижняя граница не может оказаться выше шапки: при очень низком окне (или замере
+    // посреди ресайза) капсула иначе получала отрицательную высоту
+    const podBottom = Math.max(podTop + headerH + footerH + 40, Math.min(H * 0.82, footerTop - 14));
     // В капсуле ровно коллекция мира: 9 планет, 6 зверей, 5 эмодзи
     const levels = Object.keys(collectionLevels(id)).map(Number).sort((a, b) => a - b);
     const n = levels.length;
-    const rBase = clamp(15, s * 0.042, 22);
+    // Низкая широкая капсула (телефон в горизонтали): слаймы идут слева направо
+    const innerTop = podTop + headerH;
+    const innerBottom = podBottom - footerH;
+    const innerH = innerBottom - innerTop;
+    const horizontal = H < 520 && innerH < podW * 1.15;
+    // В горизонтальной капсуле размер ограничен ещё и шириной: n слаймов в ряд не должны наезжать
+    const rBase = horizontal
+      ? Math.min(clamp(15, s * 0.042, 22), innerH * 0.3, (podW - 20) / (n * 1.9))
+      : clamp(15, s * 0.042, 22);
     // Батарейка заряжается снизу вверх: первый слайм внизу, последний наверху.
     // Чем выше уровень, тем крупнее слайм — вершина коллекции выглядит наградой.
     const radiusAt = i => Math.round((rBase * (0.8 + 0.32 * (n > 1 ? i / (n - 1) : 1))) * 2) / 2;
@@ -184,14 +202,19 @@ export function createStartScreen(opts) {
     const yBottomSlot = podBottom - footerH - radiusAt(0) * 1.25;
     const step = n > 1 ? (yBottomSlot - yTopSlot) / (n - 1) : 0;
     const sway = clamp(12, podW * 0.2, 48);
+    const xL = cx - podW / 2 + 10 + radiusAt(0);
+    const xR = cx + podW / 2 - 10 - rTop;
+    const stepX = n > 1 ? (xR - xL) / (n - 1) : 0;
+    const midY = (innerTop + innerBottom) / 2;
+    const swayY = clamp(0, innerH / 2 - rTop - 4, 24);
     const slots = levels.map((lv, i) => ({
       level: lv,
       entityId: entityIdOf(id, lv),
       themeId: id,
       r: radiusAt(i),
-      // Плавная змейка вместо жёсткого зигзага
-      x: Math.round(cx + Math.sin(i * 1.25 + 0.6) * sway),
-      y: Math.round(yBottomSlot - i * step),
+      // Плавная змейка вместо жёсткого зигзага: вверх по капсуле или, в низкой капсуле, вправо
+      x: Math.round(horizontal ? xL + i * stepX : cx + Math.sin(i * 1.25 + 0.6) * sway),
+      y: Math.round(horizontal ? midY + Math.sin(i * 1.25 + 0.6) * swayY : yBottomSlot - i * step),
       unlocked: false
     }));
     const unlocked = progress.isThemeUnlocked(id);
@@ -217,6 +240,7 @@ export function createStartScreen(opts) {
       capH,
       headerH,
       footerH,
+      horizontal,
       yCenter: (podTop + podBottom) / 2
     };
   }
@@ -224,7 +248,7 @@ export function createStartScreen(opts) {
   function pyramidData(W, H) {
     const s = Math.min(W, H);
     const cx = W / 2;
-    const r = clamp(9, s * 0.026, 17);
+    const r = clamp(10, s * 0.029, 19);
     // Пирамидка всегда под заголовком, а не поверх него
     const yTop = Math.max(H * 0.075, titleBottom + r + 8);
     const yBot = yTop + r * 2.2;
@@ -244,7 +268,9 @@ export function createStartScreen(opts) {
   function computeLayout(W, H) {
     const gap = clamp(10, W * 0.018, 22);
     // На широких экранах капсулы не растягиваются в квадраты, а собираются по центру
-    const podW = Math.min((W - gap * 4) / 3, clamp(160, H * 0.34, 300));
+    // В горизонтали капсулы шире: высоты мало, и слаймы в них идут слева направо
+    const landscape = H < 520 && W > H * 1.3;
+    const podW = Math.min((W - gap * 4) / 3, landscape ? 300 : clamp(160, H * 0.34, 300));
     const x0 = (W - (podW * 3 + gap * 2)) / 2;
     const cxs = THEME_ORDER.map((_, i) => x0 + podW / 2 + i * (podW + gap));
     const base = pyramidData(W, H);
@@ -255,7 +281,7 @@ export function createStartScreen(opts) {
 
   function ensureLayout() {
     if (!measure()) return false;
-    const key = rect.width + 'x' + rect.height + ':' + titleBottom;
+    const key = rect.width + 'x' + rect.height + ':' + titleBottom + ':' + footerTop;
     if (key !== layoutKey || !layout) {
       layout = computeLayout(rect.width, rect.height);
       if (!animGlass) {
@@ -432,7 +458,8 @@ export function createStartScreen(opts) {
     // base cubes
     b.cubes.forEach((c, i) => {
       const bob = Math.sin(now * 0.002 + i * 1.3) * c.r * 0.1;
-      drawSprite(g, { ...c, level: i + 1 }, c.y + bob, 1);
+      // glow 0.7 — ореол базовых слаймов приглушён на 30%
+      drawSprite(g, { ...c, level: i + 1, glow: 0.7 }, c.y + bob, 1);
     });
   }
 
@@ -520,17 +547,20 @@ export function createStartScreen(opts) {
   // Готовый спрайт слайма со свечением: рисуется один раз, дальше только drawImage
   function spriteOf(slot) {
     const dpr = Math.min(window.devicePixelRatio || 1, quality.maxDpr());
-    const key = `${slot.themeId || 'base'}:${slot.level}:${slot.r}:${dpr}`;
+    const key = `${slot.themeId || 'base'}:${slot.level}:${slot.r}:${dpr}:${slot.glow != null ? slot.glow : ''}`;
     if (spriteCache.has(key)) return spriteCache.get(key);
     let spr = null;
     try {
       const half = Math.ceil(slot.r * 2.2);
+      // Спрайт печётся с двойным запасом по разрешению: слаймы покачиваются на дробных
+      // пикселях, и при размере 1:1 сглаживание делало их мутными
+      const scale = dpr * 2;
       const c = document.createElement('canvas');
-      c.width = Math.ceil(half * 2 * dpr);
+      c.width = Math.ceil(half * 2 * scale);
       c.height = c.width;
       const og = c.getContext('2d');
-      og.setTransform(dpr, 0, 0, dpr, 0, 0);
-      quality.bake(() => drawOn(og, { ...slot, x: half, y: half, unlocked: true }, 0, 0.6));
+      og.setTransform(scale, 0, 0, scale, 0, 0);
+      quality.bake(() => drawOn(og, { ...slot, x: half, y: half, unlocked: true }, 0, slot.glow != null ? slot.glow : 0.6));
       spr = { canvas: c, half };
     } catch (err) {
       spr = null;
@@ -959,6 +989,7 @@ function drawPod(g, pod, now) {
   function drawPodCharge(g, pod, isActive, now, px, py, pw, pb) {
     const k = openIndex(pod);
     if (k < 0) return;
+    if (pod.horizontal) return drawPodChargeSideways(g, pod, isActive, now, px, py, pw, pb, k);
     const top = k === pod.slots.length - 1
       ? py + pod.headerH
       : pod.slots[k].y - pod.slots[k].r - 8;
@@ -1005,6 +1036,33 @@ function drawPod(g, pod, now) {
     g.restore();
   }
 
+  function drawPodChargeSideways(g, pod, isActive, now, px, py, pw, pb, k) {
+    const edge = k === pod.slots.length - 1 ? px + pw : pod.slots[k].x + pod.slots[k].r + 8;
+    const t = now * 0.002;
+    const surface = y => edge + Math.sin(y * 0.08 + t) * 3 + Math.sin(y * 0.13 - t * 1.3) * 1.5;
+    g.save();
+    g.beginPath();
+    g.moveTo(px, py);
+    for (let y = py; y <= pb; y += 6) g.lineTo(surface(y), y);
+    g.lineTo(surface(pb), pb);
+    g.lineTo(px, pb);
+    g.closePath();
+    const fill = g.createLinearGradient(px, 0, edge, 0);
+    fill.addColorStop(0, withAlpha(pod.accent, isActive ? 0.34 : 0.18));
+    fill.addColorStop(1, withAlpha(pod.accent, isActive ? 0.2 : 0.11));
+    g.fillStyle = fill;
+    g.fill();
+    g.beginPath();
+    for (let y = py; y <= pb; y += 6) {
+      if (y === py) g.moveTo(surface(y), y);
+      else g.lineTo(surface(y), y);
+    }
+    g.strokeStyle = withAlpha(pod.accent, isActive ? 0.75 : 0.4);
+    g.lineWidth = 1.5;
+    g.stroke();
+    g.restore();
+  }
+
   // Тропинка через все слоты: пройденная часть светится, дальше — пунктир
   function drawPodPath(g, pod, isActive) {
     const pts = pod.slots;
@@ -1015,8 +1073,13 @@ function drawPod(g, pod, now) {
       for (let i = from + 1; i <= to; i++) {
         const a = pts[i - 1];
         const b = pts[i];
-        const my = (a.y + b.y) / 2;
-        g.bezierCurveTo(a.x, my, b.x, my, b.x, b.y);
+        if (pod.horizontal) {
+          const mx = (a.x + b.x) / 2;
+          g.bezierCurveTo(mx, a.y, mx, b.y, b.x, b.y);
+        } else {
+          const my = (a.y + b.y) / 2;
+          g.bezierCurveTo(a.x, my, b.x, my, b.x, b.y);
+        }
       }
     };
     g.save();
@@ -1099,6 +1162,8 @@ function drawPod(g, pod, now) {
       rafId = requestAnimationFrame(frame);
       return;
     }
+    // Следующий кадр заказываем до отрисовки: сбой в одном кадре не должен гасить экран навсегда
+    rafId = requestAnimationFrame(frame);
     const now = performance.now();
     if (lastFrameAt) quality.sample(now - lastFrameAt);
     lastFrameAt = now;
@@ -1118,8 +1183,6 @@ function drawPod(g, pod, now) {
     drawPyramid(ctx, now);
     drawBalanceLine(ctx);
     layout.pods.forEach(p => drawPod(ctx, p, now));
-
-    rafId = requestAnimationFrame(frame);
   }
 
   function updateLabels() {

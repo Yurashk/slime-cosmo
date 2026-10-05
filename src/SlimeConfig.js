@@ -324,23 +324,23 @@ const ANIMALS = {
   }
 };
 
-// 🔥 НЕОНОВЫЙ НАБОР ФИГУРНЫХ ЭМОЦИОНАЛЬНЫХ СЛАЙМОВ
-// Полупрозрачный глянцевый гель с innerCore, чёткими бликами по углам и сочным неоновым свечением.
-// Лицо не наклеивается глифом, а рисуется вектором и вплавляется в форму тела.
+// Эмодзи в привычном виде: объёмное жёлтое лицо (у чертёнка — фиолетовое), у огня — пламя,
+// сердце — просто красное сердце без лица.
+// base/dark/light — тон лица для превью и закрытых слотов, glow — мягкое свечение вокруг.
 const EMOJI = {
   heart: {
     name: 'Heart',
-    face: '😍',
+    face: '❤️',
     shape: 'heart',
-    faceStyle: 'heartEyes',
-    hue: 330,
-    base: '#FF3399',
-    dark: '#A8105C',
-    light: '#FFA3CB',
-    rim: '#FFD9E9',
-    glow: '#FF3399',
-    aura: 1,
-    glowBlur: 52,
+    faceStyle: null,
+    hue: 348,
+    base: '#FF2D55',
+    dark: '#A80F33',
+    light: '#FF9DB0',
+    rim: '#FF6F8C',
+    glow: '#FF4D79',
+    aura: 0.8,
+    glowBlur: 40,
     surface: 'smooth'
   },
   fire: {
@@ -349,13 +349,13 @@ const EMOJI = {
     shape: 'flame',
     faceStyle: 'eager',
     hue: 26,
-    base: '#FF9426',
-    dark: '#A8480A',
-    light: '#FFC58A',
-    rim: '#FFE3BC',
-    glow: '#FF7A18',
-    aura: 1,
-    glowBlur: 54,
+    base: '#FF8A00',
+    dark: '#D1300F',
+    light: '#FFE45C',
+    rim: '#FFC233',
+    glow: '#FF6A1A',
+    aura: 0.9,
+    glowBlur: 46,
     surface: 'smooth'
   },
   devil: {
@@ -363,14 +363,14 @@ const EMOJI = {
     face: '😈',
     shape: 'devil',
     faceStyle: 'sly',
-    hue: 338,
-    base: '#E6004C',
-    dark: '#78001F',
-    light: '#FF7BA6',
-    rim: '#FFC4D8',
-    glow: '#FF0044',
-    aura: 1,
-    glowBlur: 50,
+    hue: 275,
+    base: '#AD6BE6',
+    dark: '#5E2A93',
+    light: '#EBD2FF',
+    rim: '#C9A0F5',
+    glow: '#B266FF',
+    aura: 0.8,
+    glowBlur: 40,
     surface: 'smooth'
   },
   angel: {
@@ -378,14 +378,14 @@ const EMOJI = {
     face: '😇',
     shape: 'angel',
     faceStyle: 'happy',
-    hue: 190,
-    base: '#00E8FF',
-    dark: '#00728F',
-    light: '#A6F2FF',
-    rim: '#E2FBFF',
-    glow: '#00E8FF',
-    aura: 1,
-    glowBlur: 56,
+    hue: 48,
+    base: '#FFD84A',
+    dark: '#D98A0B',
+    light: '#FFF7C2',
+    rim: '#FFE9A0',
+    glow: '#7FE3FF',
+    aura: 0.8,
+    glowBlur: 44,
     surface: 'smooth'
   },
   surprised: {
@@ -394,13 +394,13 @@ const EMOJI = {
     shape: 'surprised',
     faceStyle: 'wow',
     hue: 48,
-    base: '#FFCC00',
-    dark: '#96700A',
-    light: '#FFE79A',
-    rim: '#FFF6D4',
-    glow: '#FFCC00',
-    aura: 0.95,
-    glowBlur: 50,
+    base: '#FFD84A',
+    dark: '#D98A0B',
+    light: '#FFF7C2',
+    rim: '#FFE9A0',
+    glow: '#FFC93C',
+    aura: 0.8,
+    glowBlur: 40,
     surface: 'smooth'
   }
 };
@@ -518,11 +518,20 @@ function makeConfig(level) {
   };
 }
 
+// Размеры планет — отдельная пологая лестница. С общей формулой цепочка Меркурий–Нептун
+// занимала ~97% площади чаши, и собрать Солнце было почти невозможно; теперь ~84%.
+// Каждая планета чуть крупнее предыдущей и всё равно больше самого крупного кубика (53).
+const PLANET_RADIUS = { 6: 56, 7: 58, 8: 60, 9: 63, 10: 65, 11: 67, 12: 69, 13: 71, 14: 75 };
+
+function planetRadius(level, fallback) {
+  return PLANET_RADIUS[level] || Math.round(fallback * 0.9);
+}
+
 export const SLIME_CONFIGS = Array.from({ length: MAX_SLIME_LEVEL }, (_, i) => {
   const level = i + 1;
   const base = level <= BASE_CONFIGS.length ? { ...BASE_CONFIGS[i] } : makeConfig(level);
   const cfg = { ...base, ...buildVisuals(level) };
-  if (cfg.isPlanet) cfg.radius = Math.round(cfg.radius * 0.9);
+  if (cfg.isPlanet) cfg.radius = planetRadius(level, cfg.radius);
   return cfg;
 });
 
@@ -610,7 +619,7 @@ function themedConfig(level, themeId) {
     cfg = { ...base, ...buildVisuals(level, true) };
   } else {
     cfg = { ...base, ...buildVisuals(level) };
-    if (cfg.isPlanet) cfg.radius = Math.round(cfg.radius * 0.9);
+    if (cfg.isPlanet) cfg.radius = planetRadius(level, cfg.radius);
   }
 
   THEMED_CONFIGS.set(key, cfg);

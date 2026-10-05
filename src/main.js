@@ -18,6 +18,8 @@ import { startLeaderboard, reportScore, leaderboardGameOver, leaderboardRestart 
 import { sfx } from './audio.js';
 import { progress } from './state.js';
 import { quality, GLOW_SCALE } from './quality.js';
+import { ads } from './ads.js';
+import { tutorial } from './tutorial.js';
 import { THEMES, loadTheme, entityIdOf, THEME_BASE_FROM, bowlStyle } from './themes/registry.js';
 import { createStartScreen } from './startScreen.js';
 
@@ -39,7 +41,12 @@ const collectionCtx = collectionCanvas ? collectionCanvas.getContext('2d') : nul
 const unlockPopup = document.getElementById('unlock-popup');
 const unlockOrb = document.getElementById('unlock-orb');
 const unlockName = document.getElementById('unlock-name');
-const restartBtn = document.getElementById('restart-btn');
+const menuBtn = document.getElementById('menu-btn');
+const pauseOverlay = document.getElementById('pause-overlay');
+const pauseResumeBtn = document.getElementById('pause-resume');
+const pauseSoundBtn = document.getElementById('pause-sound');
+const pauseRestartBtn = document.getElementById('pause-restart');
+const pauseQuitBtn = document.getElementById('pause-quit');
 const lbToggle = document.getElementById('lb-toggle');
 const playAgainBtn = document.getElementById('play-again-btn');
 const backToMenuBtn = document.getElementById('back-to-menu-btn');
@@ -97,6 +104,7 @@ let dpr = 1;
 let layoutScale = 1;
 let bowlCenterX = 0, bowlYTop = 0, bowlYBottom = 0, bowlHalfTop = 0, bowlHalfBottom = 0, bowlHalfBody = 0, bowlHalfLip = 0, bowlLipH = 0;
 let lastBowlWidth = 0;
+let lastBowlHeight = 0;
 let targetX = null;
 let renderPreviewX = null;
 let dragOriginX = null;
@@ -127,6 +135,17 @@ const BOOSTER_DEFS = {
   blackhole: { unlockLevel: 8 }
 };
 const BOOSTER_NAMES = { blackhole: 'Black Hole' };
+// Экономика чёрной дыры. Заряды зарабатываются игрой, но так, чтобы бустер не спамился:
+// - энергия за слияния медленная (~1 заряд за 3–4 минуты), комбо добавляет не больше ×3;
+// - за первое в жизни открытие каждого третьего слайма коллекции (3-й, 6-й, 9-й) — +1;
+// - реклама — не чаще раза за партию; спасение падающего слайма — тоже раз за партию;
+// - после использования 20 с перезарядки, а зарядов больше трёх не копится.
+const BH_MAX_CHARGES = 3;
+const BH_ENERGY_MAX = 400;
+const BH_ENERGY_COMBO_CAP = 3;
+const BH_COOLDOWN = 20000;
+const BH_DISCOVERY_EVERY = 3;
+const BH_ENERGY_KEY = 'neon-slime-booster-energy';
 const BH_DURATION = 620;
 const BH_TOUCH_LIFT = 72;
 
@@ -134,11 +153,6 @@ const boosterEls = {};
 const blackHoles = [];
 const AD_KEY = 'neon-slime-boosters';
 const AD_UNLOCK_KEY = 'neon-slime-booster-unlocks';
-const adOverlay = document.getElementById('ad-overlay');
-const adMessageEl = document.getElementById('ad-message');
-const adProgressBarEl = document.getElementById('ad-progress-bar');
-const adCloseBtn = document.getElementById('ad-close-btn');
-const adRewardEl = document.getElementById('ad-reward');
 const bhConfirmOverlay = document.getElementById('bh-confirm-overlay');
 const bhConfirmCanvas = document.getElementById('bh-confirm-canvas');
 const bhConfirmName = document.getElementById('bh-confirm-name');
@@ -161,6 +175,17 @@ const BH_DRAG_THRESHOLD = 14;
 let bhTouchStart = null;
 let bhDragAim = false;
 let pendingDrop = false;
+// Межигровая реклама: только на переходе в новую партию после проигрыша, не после первой
+// партии сессии и не после коротких партий. Поверх — лимит самого SDK (обычно раз в 3 минуты).
+const MIDGAME_MIN_GAME_MS = 60000;
+let finishedGames = 0;
+let midgameDue = false;
+let bhEnergy = 0;
+let bhCooldownUntil = 0;
+let adRefillUsed = false;   // реклама за бустер — раз за партию
+let rescueUsed = false;     // спасение — раз за партию
+let rescuePending = false;  // идёт выбор «спасти или нет»: проверка проигрыша на паузе
+let confirmCancel = null;
 let boosterCharges = { blackhole: 1 };
 let boostersUnlocked = {};
 let bhMode = false;
@@ -345,16 +370,17 @@ function computeCollectionLayout() {
 }
 
 function drawPanelEyes(g, r, dirX, dirY) {
-  const eyeY = -r * 0.04;
-  const eyeSpacing = r * 0.5;
-  const eyeR = Math.max(1.4, r * 0.15);
+  // Те же пропорции, что у слаймов в игре (drawSlimeFace, где sizeX = 2r)
+  const eyeY = -r * 0.1;
+  const eyeSpacing = r * 0.56;
+  const eyeR = Math.max(1.8, r * 0.3);
   g.save();
   g.shadowBlur = 0;
   g.lineJoin = 'round';
   g.lineCap = 'round';
   for (const s of [-1, 1]) {
-    const ex = s * eyeSpacing * 0.5 + dirX * eyeSpacing * 0.12;
-    const ey = eyeY + dirY * eyeSpacing * 0.12;
+    const ex = s * eyeSpacing * 0.5 + dirX * eyeSpacing * 0.15;
+    const ey = eyeY + dirY * eyeSpacing * 0.15;
     g.beginPath();
     g.arc(ex, ey, eyeR, 0, Math.PI * 2);
     g.fillStyle = '#ffffff';
@@ -481,9 +507,12 @@ function drawPanelSlime(g, slot, now, glowScale = 1) {
   } else {
     const chamfer = Math.max(1.5, Math.min(8, r * 0.35));
     // Объёмная "стеклянная конфета": диагональный блик + насыщенное ядро
+    // glowScale < 1 приглушает только ореол вокруг (на стартовом экране он рябил в глазах);
+    // само тело остаётся таким же ярким, как в игре
+    const glowK = Math.min(1, glowScale);
     g.save();
-    g.shadowColor = cfg.glowColor;
-    g.shadowBlur = r * 0.5;
+    g.shadowColor = glowK < 1 ? hexA(cfg.glowColor, glowK) : cfg.glowColor;
+    g.shadowBlur = r * 0.5 * glowK;
     const grad = g.createLinearGradient(-r * 0.55, -r * 0.7, r * 0.6, r * 0.8);
     grad.addColorStop(0, lightenColor(cfg.color, 62));
     grad.addColorStop(0.32, lightenColor(cfg.color, 26));
@@ -541,15 +570,16 @@ function drawPanelSlime(g, slot, now, glowScale = 1) {
   if (cfg.isAnimal && cfg.features && cfg.features.eyeStyle) {
     drawPanelAnimalEyes(g, r, cfg);
   } else {
-    drawPanelEyes(g, r, 0, -1);
+    drawPanelEyes(g, r, 0, 0);
   }
   g.restore();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ФИГУРНЫЕ НЕОНОВЫЕ СЛАЙМЫ: общие билдеры формы, деталей и лица.
-// Используются и панелью/коллекцией, и геймплеем — чтобы силуэт и мимика
-// совпадали в любом контексте.
+// ЭМОДЗИ-СЛАЙМЫ в стиле привычных эмодзи: объёмное жёлтое (у чертёнка — фиолетовое)
+// лицо с бликом и тёмными чертами, у огня — настоящая форма пламени.
+// Тело — круг радиуса r, ровно по физическому телу, чтобы слаймы касались вплотную.
+// Используется и в игре, и в панелях/коллекции — вид везде одинаковый.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function slimeHeartPath(ctx, x, y, s) {
@@ -561,153 +591,169 @@ function slimeHeartPath(ctx, x, y, s) {
   ctx.closePath();
 }
 
-// Тело всегда круг радиуса r, где r = config.radius * layoutScale — то есть
-// ровно радиус физического тела. Иначе силуэт меньше коллайдера и слаймы
-// визуально не касаются друг друга (невидимый маржин).
-// Характер задаётся деталями (рожки/хвост, крылья/нимб, языки пламени) и лицом.
-function emojiBodyPath(ctx, shape, r) {
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
+// Кожа эмодзи: блик → основной тон → край → тёмная кромка; ink — цвет черт лица
+const EMOJI_SKIN = {
+  yellow: { hi: '#FFF7C2', mid: '#FFD84A', edge: '#F7B21A', rim: '#D98A0B', ink: '#5B3416', shade: 'rgba(170, 86, 0, 0.32)' },
+  purple: { hi: '#EBD2FF', mid: '#AD6BE6', edge: '#8746C6', rim: '#5E2A93', ink: '#2E0C4A', shade: 'rgba(40, 0, 90, 0.38)' }
+};
+
+function emojiSkin(cfg) {
+  return cfg.shape === 'devil' ? EMOJI_SKIN.purple : EMOJI_SKIN.yellow;
 }
 
-// Детали, которые сидят за телом: рожки, хвост, крылья.
-// Все они слегка живут во времени: пламя дрожит, хвост виляет, сердечко бьётся.
-function emojiBehindDetails(ctx, shape, r, p, alpha, now = 0, seed = 0) {
-  const t = now * 0.001 + seed;
+// Объёмный шар-лицо с тенью снизу
+function paintEmojiBall(ctx, r, skin) {
+  const g = ctx.createRadialGradient(-r * 0.32, -r * 0.4, r * 0.06, 0, 0, r);
+  g.addColorStop(0, skin.hi);
+  g.addColorStop(0.42, skin.mid);
+  g.addColorStop(0.86, skin.edge);
+  g.addColorStop(1, skin.rim);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.clip();
+  const sh = ctx.createLinearGradient(0, r * 0.15, 0, r);
+  sh.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  sh.addColorStop(1, skin.shade);
+  ctx.fillStyle = sh;
+  ctx.fillRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+}
 
-  if (shape === 'devil') {
-    // Рожки
-    ctx.fillStyle = hexA(p.dark, 0.95);
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.42, -r * 0.72);
-      ctx.quadraticCurveTo(s * r * 0.78, -r * 1.02, s * r * 0.62, -r * 1.28);
-      ctx.quadraticCurveTo(s * r * 0.66, -r * 0.98, s * r * 0.66, -r * 0.68);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // Хвостик — ленивое виляние вокруг основания
+// Глянцевый блик сверху — как у эмодзи на телефоне
+function paintEmojiGloss(ctx, r, alpha = 0.55) {
+  const g = ctx.createLinearGradient(0, -r * 0.94, 0, -r * 0.32);
+  g.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+  g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.06, -r * 0.6, r * 0.56, r * 0.3, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Пламя: основание — нижняя половина круга r, сверху три языка; f1..f3 — дрожание языков
+function flamePath(ctx, r, f1, f2, f3) {
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arc(0, 0, r, 0, Math.PI);
+  ctx.bezierCurveTo(-r * 1.02, -r * 0.45, -r * 0.8, -r * 0.78, -r * 0.6, -r * 1.02 + f1);
+  ctx.bezierCurveTo(-r * 0.5, -r * 0.74, -r * 0.36, -r * 0.62, -r * 0.27, -r * 0.6);
+  ctx.bezierCurveTo(-r * 0.3, -r * 1.06, -r * 0.06, -r * 1.32, r * 0.12, -r * 1.56 + f2);
+  ctx.bezierCurveTo(r * 0.22, -r * 1.16, r * 0.5, -r * 1.02, r * 0.64, -r * 0.94 + f3);
+  ctx.bezierCurveTo(r * 0.6, -r * 0.7, r * 1.02, -r * 0.45, r, 0);
+  ctx.closePath();
+}
+
+function paintFlame(ctx, r, now, seed, blink) {
+  const t = now * 0.001 + seed;
+  const fl = (k, a) => (now ? (Math.sin(t * 9 + k * 2.1) * 0.6 + Math.sin(t * 14.3 + k) * 0.4) * r * a : 0);
+  // три слоя: внешний красно-оранжевый, средний оранжевый, жёлтое ядро
+  const layers = [
+    { s: 1, from: '#FF3B1F', to: '#FF8A00', a: 0.1 },
+    { s: 0.74, from: '#FF9A1F', to: '#FFC233', a: 0.08 },
+    { s: 0.48, from: '#FFE45C', to: '#FFF7C8', a: 0.06 }
+  ];
+  for (const L of layers) {
     ctx.save();
-    ctx.translate(r * 0.72, r * 0.5);
-    ctx.rotate(now ? Math.sin(t * 3.2) * 0.28 : 0);
-    ctx.translate(-r * 0.72, -r * 0.5);
-    ctx.strokeStyle = hexA(p.dark, 0.9);
-    ctx.lineWidth = Math.max(1.2, r * 0.13);
-    ctx.beginPath();
-    ctx.moveTo(r * 0.72, r * 0.5);
-    ctx.quadraticCurveTo(r * 1.12, r * 0.72, r * 1.0, r * 1.1);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(r * 1.0, r * 1.1);
-    ctx.lineTo(r * 0.84, r * 1.04);
-    ctx.moveTo(r * 1.0, r * 1.1);
-    ctx.lineTo(r * 1.0, r * 0.92);
-    ctx.stroke();
-    ctx.restore();
-  } else if (shape === 'angel') {
-    // Крылышки — мягкие взмахи вокруг точки крепления к телу
-    const flap = now ? Math.sin(t * 5) * 0.16 : 0;
-    const wing = s => {
-      ctx.save();
-      ctx.translate(s * r * 0.72, -r * 0.04);
-      ctx.rotate(-s * flap);
-      ctx.translate(-s * r * 0.72, r * 0.04);
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.72, -r * 0.24);
-      ctx.quadraticCurveTo(s * r * 1.28, -r * 0.68, s * r * 1.16, -r * 0.02);
-      ctx.quadraticCurveTo(s * r * 1.08, r * 0.34, s * r * 0.74, r * 0.16);
-      ctx.closePath();
-      const g = ctx.createLinearGradient(s * r * 0.7, 0, s * r * 1.2, 0);
-      g.addColorStop(0, hexA(p.light, 0.95));
-      g.addColorStop(1, hexA(p.rim, 0.5));
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.strokeStyle = hexA(p.rim, 0.7);
-      ctx.lineWidth = Math.max(0.8, r * 0.045);
-      ctx.stroke();
-      ctx.restore();
-    };
-    wing(-1);
-    wing(1);
-  } else if (shape === 'flame') {
-    // Корона из языков пламени, торчащая из-за верхнего края круга
-    const tongue = (dx, w, top, base) => {
-      ctx.beginPath();
-      ctx.moveTo(dx - w, base);
-      ctx.quadraticCurveTo(dx - w * 0.5, (base + top) * 0.5, dx, top);
-      ctx.quadraticCurveTo(dx + w * 0.5, (base + top) * 0.5, dx + w, base);
-      ctx.quadraticCurveTo(dx, base + r * 0.22, dx - w, base);
-      ctx.closePath();
-      ctx.fill();
-    };
-    const g = ctx.createLinearGradient(0, -r * 1.5, 0, -r * 0.4);
-    g.addColorStop(0, hexA(p.light, 0.95));
-    g.addColorStop(1, hexA(p.base, 0.6));
+    // слои сжимаются к низу пламени, чтобы ядро сидело в основании
+    ctx.translate(0, r * 0.42 * (1 - L.s));
+    ctx.scale(L.s, L.s);
+    flamePath(ctx, r, fl(1, L.a), fl(2, L.a), fl(3, L.a));
+    const g = ctx.createLinearGradient(0, -r * 1.5, 0, r);
+    g.addColorStop(0, L.from);
+    g.addColorStop(1, L.to);
     ctx.fillStyle = g;
-    // Каждый язык дрожит в своём ритме — две синусоиды дают живое, неповторяющееся пламя
-    const flick = (k) => now ? (Math.sin(t * 9 + k * 2.1) * 0.6 + Math.sin(t * 14.3 + k) * 0.4) * r * 0.09 : 0;
-    tongue(-r * 0.46, r * 0.2, -r * 1.3 + flick(1), -r * 0.42);
-    tongue(r * 0.46, r * 0.2, -r * 1.3 + flick(2), -r * 0.42);
-    tongue(0, r * 0.26, -r * 1.66 + flick(3), -r * 0.5);
-  } else if (shape === 'heart') {
-    // Маленькое сердечко-хохолок, бьётся двойным «тук-тук» примерно раз в секунду
-    const cycle = (t * 1.1) % 1;
-    const thump = (c, at) => Math.exp(-Math.pow((c - at) / 0.05, 2));
-    const beat = now ? thump(cycle, 0.1) + thump(cycle, 0.28) * 0.6 : 0;
-    ctx.fillStyle = hexA(p.dark, 0.9);
-    ctx.beginPath();
-    slimeHeartPath(ctx, 0, -r * 1.02, r * 0.32 * (1 + beat * 0.16));
-    ctx.fill();
-    ctx.fillStyle = hexA(p.light, 0.5);
-    ctx.beginPath();
-    ctx.arc(-r * 0.1, -r * 1.16, r * 0.06, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (shape === 'surprised') {
-    // Всплеск-капелька над макушкой — подпрыгивает от удивления
-    ctx.save();
-    ctx.translate(0, now ? -Math.abs(Math.sin(t * 4)) * r * 0.08 : 0);
-    ctx.fillStyle = hexA(p.rim, 0.85);
-    ctx.beginPath();
-    ctx.moveTo(r * 0.5, -r * 0.96);
-    ctx.quadraticCurveTo(r * 0.74, -r * 1.3, r * 0.54, -r * 1.42);
-    ctx.quadraticCurveTo(r * 0.32, -r * 1.3, r * 0.5, -r * 0.96);
-    ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
-  ctx.restore();
-}
-
-// Детали поверх тела: нимб
-function emojiFrontDetails(ctx, shape, r, p, alpha, now) {
-  if (shape !== 'angel') return;
-  const bob = Math.sin(now * 0.002) * r * 0.03;
+  // милое личико на ядре
+  const ink = '#6A2A00';
+  const ey = r * 0.3;
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = hexA(p.glow, 0.95);
-  ctx.lineWidth = Math.max(1.4, r * 0.1);
-  ctx.shadowColor = p.glow;
-  ctx.shadowBlur = r * 0.45;
+  ctx.translate(0, ey);
+  ctx.scale(1, 1 - 0.85 * blink);
+  ctx.fillStyle = ink;
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(s * r * 0.17, 0, r * 0.065, r * 0.095, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = Math.max(1, r * 0.055);
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.ellipse(0, -r * 1.12 + bob, r * 0.56, r * 0.16, 0, 0, Math.PI * 2);
+  ctx.arc(0, r * 0.4, r * 0.13, Math.PI * 0.2, Math.PI * 0.8);
   ctx.stroke();
+}
+
+// Сердце: остриё и доли касаются круга r (физическое тело — круг, как у огня)
+function heartBodyPath(ctx, r) {
+  ctx.beginPath();
+  ctx.moveTo(0, r);
+  ctx.bezierCurveTo(r * 0.3, r * 0.74, r * 1.08, r * 0.3, r * 1.04, -r * 0.3);
+  ctx.bezierCurveTo(r * 1.0, -r * 0.86, r * 0.22, -r * 1.14, 0, -r * 0.5);
+  ctx.bezierCurveTo(-r * 0.22, -r * 1.14, -r * 1.0, -r * 0.86, -r * 1.04, -r * 0.3);
+  ctx.bezierCurveTo(-r * 1.08, r * 0.3, -r * 0.3, r * 0.74, 0, r);
+  ctx.closePath();
+}
+
+// Чистое глянцевое сердце без лица; «бьётся» двойным ударом
+function paintHeart(ctx, r, now, seed, glowColor, glow) {
+  const t = now ? (now * 0.001 + seed * 0.37) % 1.3 : 1;
+  const beat = now ? Math.exp(-t * 9) * 0.06 + Math.exp(-Math.abs(t - 0.28) * 14) * 0.035 : 0;
+  ctx.save();
+  // растёт от острия, чтобы не «проваливаться» в соседей снизу
+  ctx.translate(0, r);
+  ctx.scale(1 + beat, 1 + beat);
+  ctx.translate(0, -r);
+
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = glow;
+  const g = ctx.createRadialGradient(-r * 0.36, -r * 0.42, r * 0.05, 0, -r * 0.05, r * 1.25);
+  g.addColorStop(0, '#FF8FA6');
+  g.addColorStop(0.3, '#FF3B62');
+  g.addColorStop(0.75, '#E0143F');
+  g.addColorStop(1, '#A80F33');
+  ctx.fillStyle = g;
+  heartBodyPath(ctx, r);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  heartBodyPath(ctx, r);
+  ctx.clip();
+  const sh = ctx.createLinearGradient(0, r * 0.1, 0, r);
+  sh.addColorStop(0, 'rgba(90, 0, 30, 0)');
+  sh.addColorStop(1, 'rgba(90, 0, 30, 0.4)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
+  // глянец на левой доле и тонкий блик на правой
+  const gl = ctx.createLinearGradient(0, -r * 0.92, 0, -r * 0.2);
+  gl.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
+  gl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = gl;
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.5, -r * 0.5, r * 0.3, r * 0.2, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(r * 0.56, -r * 0.56, r * 0.13, r * 0.07, 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
   ctx.restore();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Лицо: рисуется вектором прямо по поверхности тела, поэтому кажется частью геля.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function drawEmojiFace(ctx, faceStyle, r, p, alpha, blink = 0) {
-  const ink = hexA(p.dark, 0.92);
-  const eyeY = -r * 0.08;
+// Черты лица поверх шара. eyesBegin/eyesEnd сплющивают только глаза при моргании.
+function drawEmojiFace(ctx, faceStyle, r, skin, now, blink = 0) {
+  const ink = skin.ink;
+  const eyeY = -r * 0.12;
   const eyeX = r * 0.34;
-  const eyeR = r * 0.2;
-  // Моргание: сплющиваем по вертикали только глаза, брови и рот остаются на месте
   const eyesBegin = () => {
     ctx.save();
     ctx.translate(0, eyeY);
@@ -715,279 +761,165 @@ function drawEmojiFace(ctx, faceStyle, r, p, alpha, blink = 0) {
     ctx.translate(0, -eyeY);
   };
   const eyesEnd = () => ctx.restore();
-
   ctx.save();
-  ctx.globalAlpha = alpha;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  if (faceStyle === 'heartEyes') {
-    // Глаза-сердечки: тёмная сердцевина, чтобы читались на пурпурном геле
-    eyesBegin();
-    ctx.fillStyle = ink;
-    ctx.shadowColor = 'rgba(255,60,130,0.5)';
-    ctx.shadowBlur = r * 0.2;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      slimeHeartPath(ctx, s * eyeX, eyeY, eyeR * 1.05);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeX - eyeR * 0.28, eyeY - eyeR * 0.3, eyeR * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    eyesEnd();
-    // Влюблённая улыбка
+  if (faceStyle === 'happy') {
+    // 😇 закрытые счастливые глаза, мягкая улыбка, лёгкий румянец
     ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1.2, r * 0.085);
+    ctx.lineWidth = Math.max(1.2, r * 0.08);
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(s * eyeX, eyeY + r * 0.06, r * 0.14, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    }
     ctx.beginPath();
-    ctx.arc(0, r * 0.18, r * 0.3, Math.PI * 0.18, Math.PI * 0.82);
+    ctx.arc(0, r * 0.08, r * 0.4, Math.PI * 0.22, Math.PI * 0.78);
     ctx.stroke();
-    // Румянец
-    ctx.fillStyle = 'rgba(255,90,150,0.4)';
+    ctx.fillStyle = 'rgba(255, 120, 120, 0.3)';
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.ellipse(s * r * 0.62, r * 0.2, r * 0.14, r * 0.09, 0, 0, Math.PI * 2);
+      ctx.ellipse(s * r * 0.58, r * 0.18, r * 0.14, r * 0.08, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-  } else if (faceStyle === 'eager') {
-    // Задорный азартный взгляд
+  } else if (faceStyle === 'wow') {
+    // 😮 круглые глаза, поднятые брови, рот «О»
     eyesBegin();
-    ctx.fillStyle = '#FFFFFF';
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeX, eyeY, eyeR, 0, Math.PI * 2);
-      ctx.fill();
-    }
     ctx.fillStyle = ink;
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.arc(s * eyeX + r * 0.03, eyeY + r * 0.02, eyeR * 0.56, 0, Math.PI * 2);
+      ctx.ellipse(s * eyeX * 0.92, eyeY, r * 0.1, r * 0.15, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.arc(s * eyeX - r * 0.07, eyeY - r * 0.08, eyeR * 0.22, 0, Math.PI * 2);
+      ctx.arc(s * eyeX * 0.92 - r * 0.03, eyeY - r * 0.06, r * 0.035, 0, Math.PI * 2);
       ctx.fill();
     }
     eyesEnd();
-    // Приподнятые брови
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(1, r * 0.06);
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(s * (eyeX - r * 0.18), eyeY - r * 0.3);
-      ctx.quadraticCurveTo(s * eyeX, eyeY - r * 0.44, s * (eyeX + r * 0.2), eyeY - r * 0.26);
+      ctx.arc(s * eyeX * 0.92, eyeY - r * 0.1, r * 0.17, Math.PI * 1.2, Math.PI * 1.8);
       ctx.stroke();
     }
-    // Весёлая ухмылка
-    ctx.lineWidth = Math.max(1.2, r * 0.085);
+    const mg = ctx.createRadialGradient(0, r * 0.36, 0, 0, r * 0.4, r * 0.22);
+    mg.addColorStop(0, '#2A1206');
+    mg.addColorStop(1, ink);
+    ctx.fillStyle = mg;
     ctx.beginPath();
-    ctx.moveTo(-r * 0.3, r * 0.26);
-    ctx.quadraticCurveTo(0, r * 0.5, r * 0.36, r * 0.2);
-    ctx.stroke();
+    ctx.ellipse(0, r * 0.42, r * 0.16, r * 0.21, 0, 0, Math.PI * 2);
+    ctx.fill();
   } else if (faceStyle === 'sly') {
-    // Хитрый прищур
-    eyesBegin();
-    ctx.fillStyle = '#FFFFFF';
+    // 😈 брови «домиком» к переносице, хитрые глаза, широкая ухмылка
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1.2, r * 0.075);
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.ellipse(s * eyeX, eyeY, eyeR * 1.05, eyeR * 0.52, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(s * (eyeX + r * 0.17), eyeY - r * 0.3);
+      ctx.lineTo(s * (eyeX - r * 0.15), eyeY - r * 0.16);
+      ctx.stroke();
     }
+    eyesBegin();
     ctx.fillStyle = ink;
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.ellipse(s * eyeX + r * 0.04, eyeY + r * 0.03, eyeR * 0.5, eyeR * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(s * eyeX, eyeY + r * 0.04, r * 0.085, r * 0.12, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     eyesEnd();
-    // Нахмуренные брови
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1, r * 0.07);
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * (eyeX - r * 0.2), eyeY - r * 0.26);
-      ctx.lineTo(s * (eyeX + r * 0.2), eyeY - r * 0.36);
-      ctx.stroke();
-    }
-    // Хитрая ухмылка
-    ctx.lineWidth = Math.max(1.2, r * 0.09);
+    ctx.fillStyle = ink;
     ctx.beginPath();
-    ctx.moveTo(-r * 0.32, r * 0.34);
-    ctx.quadraticCurveTo(r * 0.02, r * 0.16, r * 0.4, r * 0.34);
-    ctx.stroke();
-    // Клычок
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.moveTo(r * 0.16, r * 0.29);
-    ctx.lineTo(r * 0.24, r * 0.29);
-    ctx.lineTo(r * 0.2, r * 0.46);
+    ctx.moveTo(-r * 0.5, r * 0.12);
+    ctx.quadraticCurveTo(0, r * 0.78, r * 0.5, r * 0.12);
+    ctx.quadraticCurveTo(0, r * 0.36, -r * 0.5, r * 0.12);
     ctx.closePath();
     ctx.fill();
-  } else if (faceStyle === 'happy') {
-    // Закрытые счастливые глаза дугами
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1.3, r * 0.1);
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeX, eyeY + r * 0.1, eyeR * 0.9, Math.PI * 1.12, Math.PI * 1.88);
-      ctx.stroke();
-    }
-    // Добродушная широкая улыбка
-    ctx.beginPath();
-    ctx.arc(0, r * 0.06, r * 0.42, Math.PI * 0.2, Math.PI * 0.8);
-    ctx.stroke();
-    // Румянец
-    ctx.fillStyle = 'rgba(120,220,255,0.35)';
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.ellipse(s * r * 0.62, r * 0.16, r * 0.13, r * 0.085, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (faceStyle === 'wow') {
-    // Широко раскрытые глаза с большими зрачками
-    const er = eyeR * 0.92;
-    eyesBegin();
-    ctx.fillStyle = '#FFFFFF';
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.ellipse(s * eyeX, eyeY, er, er * 1.08, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = ink;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeX, eyeY + r * 0.03, er * 0.62, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#FFFFFF';
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * eyeX - er * 0.3, eyeY - er * 0.34, er * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    eyesEnd();
-    // Ротик буквой «О»
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1.2, r * 0.08);
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.46, r * 0.14, r * 0.17, 0, 0, Math.PI * 2);
-    ctx.stroke();
   }
-
   ctx.restore();
 }
 
-// Общая оболочка слайма: гель, ядро, блики, лицо. Используется панелью и игрой.
-function drawEmojiSlime(ctx, cfg, r, now, opacity, opts = {}) {
-  const p = cfg.palette;
-  const shape = cfg.shape || 'round';
-  const body = () => emojiBodyPath(ctx, shape, r);
-
-  // Внешнее неоновое свечение
-  ctx.save();
-  ctx.globalAlpha = opacity * 0.3;
-  const halo = ctx.createRadialGradient(0, 0, r * 0.55, 0, 0, r * 1.6);
-  halo.addColorStop(0, hexA(p.glow, 0.45 * GLOW_SCALE));
-  halo.addColorStop(1, hexA(p.glow, 0));
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  emojiBehindDetails(ctx, shape, r, p, opacity, now, opts.seed || 0);
-
-  // Тело: объёмный градиент
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.shadowColor = p.glow;
-  ctx.shadowBlur = (opts.glowBlur != null ? opts.glowBlur : r * 0.5) * 0.7;
-  const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.34, r * 0.06, 0, 0, r * 1.12);
-  grad.addColorStop(0, p.light);
-  grad.addColorStop(0.44, p.base);
-  grad.addColorStop(1, p.dark);
-  ctx.fillStyle = grad;
-  body();
-  ctx.fill();
-  ctx.restore();
-
-  // Внутренний объём, обрезанный по силуэту
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  body();
-  ctx.clip();
-
-  const shade = ctx.createLinearGradient(0, -r, 0, r);
-  shade.addColorStop(0, hexA(p.dark, 0));
-  shade.addColorStop(0.55, hexA(p.dark, 0));
-  shade.addColorStop(1, hexA(p.dark, 0.4));
-  ctx.fillStyle = shade;
-  ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
-
-  const rimLight = ctx.createLinearGradient(-r, -r, r, r);
-  rimLight.addColorStop(0, hexA(p.rim, 0.34));
-  rimLight.addColorStop(0.5, hexA(p.rim, 0.05));
-  rimLight.addColorStop(1, hexA(p.rim, 0.16));
-  ctx.fillStyle = rimLight;
-  ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
-
-  // Мягкое ядро гля
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = opacity * (0.3 + 0.08 * Math.sin(now * 0.004 + (opts.seed || 0)));
-  const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.72);
-  core.addColorStop(0, hexA(p.light, 0.8));
-  core.addColorStop(0.45, hexA(p.glow, 0.3));
-  core.addColorStop(1, hexA(p.glow, 0));
-  ctx.fillStyle = core;
-  ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
-  ctx.restore();
-
-  // Внутреннее тепло для «Огоня» — снизу, чтобы не спорить с лицом
-  if (shape === 'flame') {
-    ctx.globalAlpha = opacity * 0.55;
-    const heat = ctx.createRadialGradient(0, r * 0.5, 0, 0, r * 0.5, r * 0.9);
-    heat.addColorStop(0, hexA(p.light, 0.7));
-    heat.addColorStop(1, hexA(p.light, 0));
-    ctx.fillStyle = heat;
-    ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
-    ctx.globalAlpha = opacity;
+// Рожки чертёнка — за телом, основания прячутся под лицом
+function paintDevilHorns(ctx, r, skin) {
+  for (const s of [-1, 1]) {
+    const g = ctx.createLinearGradient(s * r * 0.45, -r * 0.7, s * r * 0.8, -r * 1.3);
+    g.addColorStop(0, skin.edge);
+    g.addColorStop(1, skin.hi);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(s * r * 0.3, -r * 0.82);
+    ctx.quadraticCurveTo(s * r * 0.62, -r * 0.98, s * r * 0.8, -r * 1.32);
+    ctx.quadraticCurveTo(s * r * 0.92, -r * 0.9, s * r * 0.74, -r * 0.6);
+    ctx.closePath();
+    ctx.fill();
   }
+}
 
-  // Чёткие блики по «углам» гля
-  ctx.globalAlpha = opacity * 0.5;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.ellipse(-r * 0.3, -r * 0.44, r * 0.3, r * 0.13, -0.7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = opacity * 0.22;
-  ctx.beginPath();
-  ctx.ellipse(r * 0.4, r * 0.5, r * 0.16, r * 0.07, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = opacity;
-
-  // Лицо вплавлено в тело
-  drawEmojiFace(ctx, cfg.faceStyle, r, p, opacity * 0.95, now ? slimeBlinkAmount(opts.seed || cfg.level, now) : 0);
-  ctx.restore();
-
-  // Иридесцентный ободок
+// Нимб ангела — светящееся кольцо над головой, мягко покачивается
+function paintHalo(ctx, r, now) {
+  const bob = now ? Math.sin(now * 0.002) * r * 0.03 : 0;
+  const y = -r * 1.1 + bob;
   ctx.save();
-  ctx.globalAlpha = opacity * 0.75;
-  ctx.strokeStyle = p.rim;
-  ctx.lineWidth = Math.max(1, r * 0.075);
-  ctx.shadowColor = p.glow;
-  ctx.shadowBlur = r * 0.3;
-  body();
+  ctx.lineWidth = Math.max(1.4, r * 0.11);
+  ctx.strokeStyle = '#9FE8FF';
+  ctx.shadowColor = '#7FE3FF';
+  ctx.shadowBlur = r * 0.4;
+  ctx.beginPath();
+  ctx.ellipse(0, y, r * 0.58, r * 0.16, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(0.8, r * 0.04);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath();
+  ctx.ellipse(0, y - r * 0.02, r * 0.58, r * 0.16, 0, Math.PI * 1.05, Math.PI * 1.95);
   ctx.stroke();
   ctx.restore();
+}
 
-  emojiFrontDetails(ctx, shape, r, p, opacity, now);
+// Общая отрисовка эмодзи-слайма. Используется панелью и игрой.
+function drawEmojiSlime(ctx, cfg, r, now, opacity, opts = {}) {
+  const p = cfg.palette;
+  const seed = opts.seed || 0;
+  const blink = now ? slimeBlinkAmount(seed || cfg.level, now) : 0;
+  const glow = (opts.glowBlur != null ? opts.glowBlur : r * 0.5) * 0.5;
+
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+
+  if (cfg.shape === 'flame') {
+    // Огонь — не шар, а настоящее пламя
+    ctx.save();
+    ctx.shadowColor = p.glow;
+    ctx.shadowBlur = glow;
+    paintFlame(ctx, r, now, seed, blink);
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+
+  if (cfg.shape === 'heart') {
+    paintHeart(ctx, r, now, seed, p.glow, glow);
+    ctx.restore();
+    return;
+  }
+
+  const skin = emojiSkin(cfg);
+  if (cfg.shape === 'devil') paintDevilHorns(ctx, r, skin);
+
+  ctx.save();
+  ctx.shadowColor = p.glow;
+  ctx.shadowBlur = glow;
+  paintEmojiBall(ctx, r, skin);
+  ctx.restore();
+
+  drawEmojiFace(ctx, cfg.faceStyle, r, skin, now, blink);
+  paintEmojiGloss(ctx, r);
+
+  if (cfg.shape === 'angel') paintHalo(ctx, r, now);
+  ctx.restore();
 }
 
 function drawPanelEmojiSlime(g, cfg, r, now, opacity = 1) {
@@ -1121,6 +1053,17 @@ function updateUnlockFly() {
 
 function bootstrap() {
   updateCanvasRect();
+  ads.setHooks({
+    pause: () => {
+      sfx.setAdMuted(true);
+      setTimescale(0);
+    },
+    resume: () => {
+      sfx.setAdMuted(false);
+      setTimescale(rescuePending || isConfirmOpen() || isPauseOpen() ? 0 : bhMode ? 0.25 : 1);
+    }
+  });
+  ads.init();
   // Переход в лёгкий режим меняет потолок DPR — пересобираем холсты под новую плотность
   quality.onChange(() => {
     updateCanvasRect();
@@ -1128,6 +1071,13 @@ function bootstrap() {
   });
   window.addEventListener('resize', updateCanvasRect);
   window.addEventListener('load', updateCanvasRect);
+  // Вёрстка может устояться позже первого замера (догрузились стили и шрифты, закончилась
+  // анимация появления обёртки) — следим за самой обёрткой и перемеряем
+  const wrapperEl = canvas.parentElement;
+  if (wrapperEl) {
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => updateCanvasRect()).observe(wrapperEl);
+    wrapperEl.addEventListener('animationend', updateCanvasRect);
+  }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', updateCanvasRect);
   }
@@ -1142,6 +1092,21 @@ function bootstrap() {
 }
 
 function startGame(themeId) {
+  resetBoosterRun();
+  // Партия с нуля: после «Back to menu» состояние прошлой партии не должно протекать.
+  // Иначе новая игра стартует «оконченной» — сцена заморожена на старом кадре и броски не работают.
+  isGameOver = false;
+  sceneFrozen = false;
+  score = 0;
+  maxLevelReached = 1;
+  totalMerges = 0;
+  bestCombo = 0;
+  totalDrops = 0;
+  isNewRecord = false;
+  pendingDrop = false;
+  nextSlimeConfig = null;
+  blackHoles.length = 0;
+  nextSlimeHud.classList.remove('hidden');
   currentThemeId = THEMES[themeId] ? themeId : 'space';
   setActiveTheme(currentThemeId);
   highScore = progress.getHighScore(currentThemeId);
@@ -1169,14 +1134,22 @@ function startGame(themeId) {
   updateUI();
   updateHighScoreUI();
   setupBoostersUI();
-  startLeaderboard();
+  startLeaderboard(Math.max(0, ...Object.keys(THEMES).map(id => progress.getHighScore(id) || 0)));
+  leaderboardRestart();
   if (!gameLoopRaf) {
     gameLoopRaf = requestAnimationFrame(gameLoop);
   }
+  startTutorial();
+  ads.gameplayStart();
+}
+
+// Обучение — только тем, кто ещё ни разу не доиграл партию ни в одном мире
+function startTutorial() {
+  tutorial.start({ seasoned: Object.keys(THEMES).some(id => progress.getHighScore(id) > 0) });
 }
 
 function drawStartSlime(slot, now) {
-  drawPanelSlime(startCtx2d, slot, now, 0.6);
+  drawPanelSlime(startCtx2d, slot, now, 0.7);
 }
 
 function startRadiusOf(entityId) {
@@ -1187,6 +1160,11 @@ function startRadiusOf(entityId) {
 
 async function handleStartPlay(themeId) {
   await loadTheme(themeId);
+  // Вход в мир после проигрыша — тоже пауза между партиями
+  if (midgameDue && !ads.showing) {
+    midgameDue = false;
+    await ads.midgame();
+  }
   startScreenEl.classList.add('hidden');
   startScreen.hide();
   startGame(themeId);
@@ -1218,19 +1196,35 @@ function updateCanvasRect() {
   }
   canvasRect = rect;
   dpr = Math.min(window.devicePixelRatio || 1, lowPower ? 1.5 : 2, quality.maxDpr());
-  layoutScale = Math.max(0.58, Math.min(1, canvasRect.width / 640));
-  canvas.width = canvasRect.width * dpr;
-  canvas.height = canvasRect.height * dpr;
-  canvas.style.width = canvasRect.width + 'px';
-  canvas.style.height = canvasRect.height + 'px';
+  // Масштаб поля: по ширине, как раньше, но не больше, чем позволяет высота. Чаша (300·s)
+  // стоит на 100px выше низа, над ней нужен запас для броска (~220·s) — иначе на телефоне
+  // в горизонтали верх чаши оказывается выше точки броска и партия кончается сразу.
+  const widthScale = Math.max(0.58, Math.min(1, canvasRect.width / 640));
+  const heightScale = (canvasRect.height - 100) / 520;
+  layoutScale = Math.max(0.42, Math.min(widthScale, heightScale));
+  // Размер холста на экране задаёт CSS (100% обёртки). Инлайн-размер в пикселях ставить нельзя:
+  // если первый замер попал на неустоявшуюся вёрстку, холст «прибивался» к неверному размеру,
+  // и все следующие замеры мерили уже его — поле оставалось маленьким до перезагрузки.
+  canvas.width = Math.round(canvasRect.width * dpr);
+  canvas.height = Math.round(canvasRect.height * dpr);
   ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  if (engine && Math.abs(canvasRect.width - lastBowlWidth) > 1) {
+  // Чаша привязана к центру и низу поля: при смене ширины ИЛИ высоты (например, на телефоне
+  // спряталась адресная строка) пересобираем её и сдвигаем слаймы вместе с ней
+  const dw = canvasRect.width - lastBowlWidth;
+  const dh = canvasRect.height - lastBowlHeight;
+  if (engine && (Math.abs(dw) > 1 || Math.abs(dh) > 1)) {
+    if (lastBowlWidth && lastBowlHeight) {
+      for (const s of slimes) {
+        Body.setPosition(s.body, { x: s.body.position.x + dw / 2, y: s.body.position.y + dh });
+      }
+    }
     rebuildBowl();
   }
   updateCollectionRect();
   lastBowlWidth = canvasRect.width;
+  lastBowlHeight = canvasRect.height;
   positionBoosterStickers();
 }
 
@@ -1246,7 +1240,7 @@ function createStars() {
   stars.length = 0;
   sparkleStars.length = 0;
   if (currentThemeId === 'animals') { buildForestBackground(); return; }
-  if (currentThemeId === 'ocean') { buildOceanBackground(); return; }
+  if (currentThemeId === 'ocean') { buildChatBackground(); return; }
   const count = (lowPower ? 22 : 45) + Math.floor(Math.random() * (lowPower ? 8 : 15));
   for (let i = 0; i < count; i++) {
     const star = {
@@ -1583,105 +1577,6 @@ function buildForestBackground() {
   }
 }
 
-function buildOceanBackground() {
-  nebulas.length = 0;
-  cosmicDust.length = 0;
-  const w = canvasRect.width;
-  const h = canvasRect.height;
-  starLayer = document.createElement('canvas');
-  starLayer.width = Math.max(1, Math.round(w * dpr));
-  starLayer.height = Math.max(1, Math.round(h * dpr));
-  const sg = starLayer.getContext('2d');
-  sg.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  // Sunrays / caustics: wide diagonal volumetric beams from the top water surface
-  const beams = 4;
-  for (let i = 0; i < beams; i++) {
-    const bx = w * (0.08 + i * 0.26) + Math.random() * w * 0.05;
-    const widthBeam = w * (0.10 + Math.random() * 0.06);
-    const angle = 0.12 + Math.random() * 0.1;
-    const alpha = 0.05 + Math.random() * 0.05;
-    const grad = sg.createLinearGradient(bx, 0, bx + widthBeam * 1.6, h);
-    grad.addColorStop(0, `rgba(140, 220, 255, ${alpha})`);
-    grad.addColorStop(0.5, `rgba(120, 200, 250, ${alpha * 0.5})`);
-    grad.addColorStop(1, 'rgba(120, 200, 250, 0)');
-    sg.fillStyle = grad;
-    sg.beginPath();
-    sg.moveTo(bx, -10);
-    sg.lineTo(bx + widthBeam, -10);
-    sg.lineTo(bx + widthBeam + Math.tan(angle) * h, h);
-    sg.lineTo(bx + Math.tan(-angle) * h, h);
-    sg.closePath();
-    sg.fill();
-  }
-
-  // Distant seabed silhouette
-  sg.beginPath();
-  sg.moveTo(0, h);
-  for (let x = 0; x <= w; x += 4) {
-    const y = h - h * 0.075 + Math.sin(x * 0.005) * h * 0.03 + Math.sin(x * 0.012 + 1.3) * h * 0.018;
-    sg.lineTo(x, y);
-  }
-  sg.closePath();
-  sg.fillStyle = 'rgba(6, 34, 62, 0.55)';
-  sg.fill();
-
-  // Coral silhouettes (branching neon hints)
-  const corals = lowPower ? 5 : 9;
-  for (let i = 0; i < corals; i++) {
-    const cx = 10 + Math.random() * (w - 20);
-    const cy = h - h * 0.05 - Math.random() * h * 0.05;
-    const ch = h * (0.05 + Math.random() * 0.08);
-    const warm = Math.random() < 0.35;
-    const c = warm ? [210, 84, 120] : [26, 120, 168];
-    const alpha = 0.24 + Math.random() * 0.26;
-    sg.lineCap = 'round';
-    sg.lineWidth = 2 + Math.random() * 1.5;
-    const branches = 3 + Math.floor(Math.random() * 3);
-    sg.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
-    for (let b = 0; b < branches; b++) {
-      const ang = -Math.PI / 2 + (b - (branches - 1) / 2) * 0.22 + (Math.random() - 0.5) * 0.1;
-      sg.beginPath();
-      sg.moveTo(cx, cy);
-      sg.quadraticCurveTo(
-        cx + Math.cos(ang) * ch * 0.5,
-        cy + Math.sin(ang) * ch * 0.5,
-        cx + Math.cos(ang) * ch,
-        cy + Math.sin(ang) * ch
-      );
-      sg.stroke();
-    }
-    sg.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
-    sg.beginPath();
-    sg.arc(cx, cy, 2, 0, Math.PI * 2);
-    sg.fill();
-  }
-
-  // Kelp / seaweed strands swaying silhouettes
-  const kelps = lowPower ? 4 : 7;
-  sg.lineCap = 'round';
-  for (let i = 0; i < kelps; i++) {
-    const kx = 6 + (w / (kelps + 1)) * (i + 1) + Math.random() * w * 0.03;
-    const klen = h * (0.10 + Math.random() * 0.14);
-    const alpha = 0.20 + Math.random() * 0.20;
-    sg.strokeStyle = `rgba(22, 96, 84, ${alpha})`;
-    sg.lineWidth = 3 + Math.random() * 2;
-    sg.beginPath();
-    sg.moveTo(kx, h);
-    sg.quadraticCurveTo(kx + 8, h - klen * 0.5, kx - 6, h - klen);
-    sg.stroke();
-    // leaf blades
-    sg.lineWidth = 1.4;
-    for (let l2 = 0; l2 < 3; l2++) {
-      const ly = h - klen * (0.2 + l2 * 0.26);
-      sg.strokeStyle = `rgba(${30 + l2 * 20}, ${120 + l2 * 26}, ${100 + l2 * 20}, ${alpha * 0.8})`;
-      sg.beginPath();
-      sg.moveTo(kx + (l2 % 2 ? 5 : -5), ly);
-      sg.quadraticCurveTo(kx + (l2 % 2 ? 13 : -13), ly - 8, kx + (l2 % 2 ? 18 : -18), ly - 3);
-      sg.stroke();
-    }
-  }
-}
 
 function createWall(sign, bb, bt, yB, yT, thickness, centerX, options) {
   const sx = sign * bb + centerX, sy = yB;
@@ -1715,7 +1610,7 @@ function computeBowlGeometry() {
   // Animals uses a bamboo pen with gently sloped walls; space/ocean keep the deeper taper.
   // A slight slope matters for physics too: in a near-square pen stacked cubes had no way
   // to slide up and out of each other.
-  const bottomRatio = currentThemeId === 'animals' ? 0.88 : 0.7;
+  const bottomRatio = currentThemeId === 'animals' ? 0.88 : currentThemeId === 'ocean' ? 0.78 : 0.7;
   const bottomWidth = topWidth * bottomRatio;
   const bb = bottomWidth / 2;
   const bt = topWidth / 2;
@@ -1791,8 +1686,18 @@ function setupEventListeners() {
   canvas.addEventListener('touchcancel', handleTouchCancel);
   window.addEventListener('keydown', handleKeyDown);
 
-  restartBtn.addEventListener('click', requestRestart);
-  playAgainBtn.addEventListener('click', restartGame);
+  menuBtn.addEventListener('click', openPauseMenu);
+  pauseResumeBtn.addEventListener('click', closePauseMenu);
+  pauseSoundBtn.addEventListener('click', togglePauseSound);
+  pauseRestartBtn.addEventListener('click', () => {
+    closePauseMenu();
+    requestRestart(openPauseMenu);
+  });
+  pauseQuitBtn.addEventListener('click', () => {
+    closePauseMenu();
+    requestQuit();
+  });
+  playAgainBtn.addEventListener('click', () => playAfterBreak(restartGame));
   backToMenuBtn.addEventListener('click', backToMain);
   if (lbToggle) lbToggle.addEventListener('click', toggleLeaderboardPanel);
 
@@ -1801,24 +1706,98 @@ function setupEventListeners() {
 }
 
 // Рестарт посреди партии — только после подтверждения: кнопка маленькая и стоит рядом с бустером
-function requestRestart() {
-  if (isGameOver || (score === 0 && slimes.length <= 1)) {
+// Переход в новую партию после проигрыша — естественная пауза для межигровой рекламы
+async function playAfterBreak(start) {
+  if (midgameDue && !ads.showing) {
+    midgameDue = false;
+    playAgainBtn.disabled = true;
+    await ads.midgame();
+    playAgainBtn.disabled = false;
+  }
+  start();
+}
+
+// onCancel — куда вернуться, если игрок передумал (из меню паузы — обратно в меню)
+function requestRestart(onCancel = null) {
+  if (isGameOver) {
+    playAfterBreak(restartGame);
+    return;
+  }
+  if (score === 0 && slimes.length <= 1) {
     restartGame();
     return;
   }
-  askConfirm({ title: 'RESTART?', text: 'Current game will be lost', yes: 'RESTART', onYes: restartGame });
+  askConfirm({ title: 'RESTART?', text: 'Current game will be lost', yes: 'RESTART', onYes: restartGame, onNo: typeof onCancel === 'function' ? onCancel : null });
+}
+
+// Меню паузы: звук, рестарт, выход в главное меню. Физика стоит, пока оно открыто.
+function isPauseOpen() {
+  return !!(pauseOverlay && !pauseOverlay.classList.contains('hidden'));
+}
+
+function openPauseMenu() {
+  if (!pauseOverlay || isGameOver || isPauseOpen() || isConfirmOpen() || rescuePending || adJob) return;
+  if (bhMode) exitBlackHoleMode(false);
+  pendingDrop = false;
+  updatePauseSoundBtn();
+  ads.gameplayStop();
+  setTimescale(0);
+  pauseOverlay.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  if (!isPauseOpen()) return;
+  pauseOverlay.classList.add('hidden');
+  setTimescale(1);
+  if (!isGameOver) ads.gameplayStart();
+}
+
+function updatePauseSoundBtn() {
+  if (!pauseSoundBtn) return;
+  const on = !sfx.isMuted();
+  pauseSoundBtn.textContent = on ? 'Sound: on' : 'Sound: off';
+  pauseSoundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
+function togglePauseSound() {
+  sfx.setMuted(!sfx.isMuted());
+  updatePauseSoundBtn();
+  if (!sfx.isMuted()) sfx.playDrop();
+}
+
+function requestQuit() {
+  if (score === 0 && slimes.length <= 1) {
+    backToMain();
+    return;
+  }
+  askConfirm({ title: 'QUIT?', text: 'Current game will be lost', yes: 'QUIT', onYes: quitToMenu, onNo: openPauseMenu });
+}
+
+// Выход посреди партии: набранный счёт не пропадает — рекорд и таблица обновляются
+function quitToMenu() {
+  if (score > highScore) {
+    highScore = score;
+    progress.setHighScore(currentThemeId, score);
+  }
+  leaderboardGameOver(score);
+  backToMain();
 }
 
 // Общий диалог подтверждения. Физика на паузе, пока он открыт.
-function askConfirm({ title, text, yes, onYes }) {
+function askConfirm({ title, text, yes, onYes, onNo = null, no = 'CANCEL', seeThrough = false }) {
   if (!confirmOverlay) {
     onYes();
     return;
   }
   confirmAction = onYes;
+  confirmCancel = onNo;
   confirmTitleEl.textContent = title;
   confirmTextEl.textContent = text;
   confirmYesBtn.textContent = yes;
+  if (!isGameOver) ads.gameplayStop();
+  if (confirmNoBtn) confirmNoBtn.textContent = no;
+  // Полупрозрачный фон — когда важно видеть замершую сцену (спасение падающего слайма)
+  confirmOverlay.classList.toggle('see-through', seeThrough);
   setTimescale(0);
   confirmOverlay.classList.remove('hidden');
 }
@@ -1826,10 +1805,14 @@ function askConfirm({ title, text, yes, onYes }) {
 function closeConfirm(run) {
   if (!isConfirmOpen()) return;
   const action = confirmAction;
+  const cancel = confirmCancel;
   confirmAction = null;
+  confirmCancel = null;
   confirmOverlay.classList.add('hidden');
   setTimescale(bhMode ? 0.25 : 1);
+  if (!isGameOver) ads.gameplayStart();
   if (run && action) action();
+  else if (!run && cancel) cancel();
 }
 
 function isConfirmOpen() {
@@ -1970,6 +1953,10 @@ function handleTouchCancel() {
 
 function handleKeyDown(e) {
   if (adJob) return;
+  if (isPauseOpen()) {
+    if (e.code === 'Escape' || e.code === 'KeyP') closePauseMenu();
+    return;
+  }
   if (isConfirmOpen()) {
     if (e.code === 'Escape') closeConfirm(false);
     return;
@@ -1980,6 +1967,10 @@ function handleKeyDown(e) {
     } else {
       exitBlackHoleMode(false);
     }
+    return;
+  }
+  if ((e.code === 'Escape' || e.code === 'KeyP') && !isGameOver) {
+    openPauseMenu();
     return;
   }
   if (e.code === 'Space' && !isGameOver) {
@@ -2023,7 +2014,7 @@ function stylePreviewElement(el, config, size, glow) {
   }
   if ((config.isPlanet || config.isAnimal || config.isEmoji) && config.palette) {
     const p = config.palette;
-    el.style.borderRadius = config.isPlanet ? '50%' : '24%';
+    el.style.borderRadius = config.isPlanet || config.isEmoji ? '50%' : '24%';
     el.style.background = `radial-gradient(circle at 30% 30%, ${p.light}, ${p.base} 45%, ${p.dark})`;
     el.style.boxShadow = `${glow ? '0 0 14px ' + p.glow + ', 0 0 28px ' + p.glow : '0 0 8px ' + p.glow}`;
   } else {
@@ -2041,9 +2032,19 @@ function updatePreview() {
   previewEl.classList.remove('hidden');
 }
 
+// Шансы слаймов для броска [ур.1, ур.2, ур.3]. Когда в партии уже открыт первый слайм
+// коллекции, мелкий голубой кубик выпадает реже: на этом этапе он в основном засоряет чашу.
+const DROP_WEIGHTS_EARLY = [0.475, 0.475, 0.05];
+const DROP_WEIGHTS_COLLECTION = [0.25, 0.6, 0.15];
+
 function getRandomLowLevelSlime() {
-  if (Math.random() < 0.05) return SLIME_CONFIGS[2];
-  return SLIME_CONFIGS[Math.floor(Math.random() * 2)];
+  const w = maxLevelReached >= THEME_BASE_FROM ? DROP_WEIGHTS_COLLECTION : DROP_WEIGHTS_EARLY;
+  let roll = Math.random();
+  for (let i = 0; i < w.length; i++) {
+    roll -= w[i];
+    if (roll < 0) return SLIME_CONFIGS[i];
+  }
+  return SLIME_CONFIGS[w.length - 1];
 }
 
 function spawnNextSlime() {
@@ -2077,6 +2078,7 @@ function dropSlime() {
   pendingDrop = false;
   lastDropTime = now;
   totalDrops += 1;
+  tutorial.onDrop();
 
   const centerX = canvasRect.width / 2;
   const dropX = clampDropX(renderPreviewX != null ? renderPreviewX : centerX);
@@ -2097,7 +2099,7 @@ function dropSlime() {
 function createSlime(x, y, config) {
   const radPx = config.radius * layoutScale;
   const baseOptions = {
-    density: config.isPlanet || config.isAnimal ? config.density * (4 / Math.PI) : config.density,
+    density: config.isPlanet || config.isAnimal || config.isEmoji ? config.density * (4 / Math.PI) : config.density,
     restitution: Math.min(config.restitution, 0.15),
     friction: config.friction,
     frictionAir: 0.05,
@@ -2118,7 +2120,10 @@ function createSlime(x, y, config) {
     }
   };
 
-  const body = config.isPlanet
+  // Планеты и эмодзи круглые — тело по форме рисунка, иначе они стоят «углами» и висят в воздухе.
+  // Плотность выше умножена на 4/π, чтобы круг весил как квадрат того же размера.
+  const round = config.isPlanet || config.isEmoji;
+  const body = round
     ? Bodies.circle(x, y, radPx, baseOptions)
     : Bodies.rectangle(x, y, radPx * 2, radPx * 2, {
         ...baseOptions,
@@ -2207,13 +2212,13 @@ function containSlimes() {
     const r = slime.config.radius * layoutScale;
 
     if (pos.y - r > bowlYBottom + t) {
-      slime.flownOut = true;
+      onSlimeFlownOut(slime);
       continue;
     }
 
     if (pos.y < bowlYTop) {
       if (Math.abs(pos.x - bowlCenterX) > bowlHalfTop + r + BOWL_EDGE_TOLERANCE) {
-        slime.flownOut = true;
+        onSlimeFlownOut(slime);
       } else if (slime.body.velocity.y < 0) {
         Body.setVelocity(slime.body, { x: slime.body.velocity.x, y: slime.body.velocity.y * -0.2 });
       }
@@ -2223,7 +2228,7 @@ function containSlimes() {
     const safe = Math.max(0, bowlSafeHalfWidth(pos.y) - r);
     const over = pos.x >= bowlCenterX ? pos.x - (bowlCenterX + safe) : (bowlCenterX - safe) - pos.x;
     if (over > t + BOWL_EDGE_TOLERANCE) {
-      slime.flownOut = true;
+      onSlimeFlownOut(slime);
       continue;
     }
     if (over > 0) {
@@ -2396,6 +2401,7 @@ function performMerge(a, b) {
   }
   lastComboAt = nowMs;
   totalMerges += 1;
+  tutorial.onMerge();
   if (comboCount > bestCombo) bestCombo = comboCount;
   if (comboCount >= 2) {
     comboShownUntil = nowMs + COMBO_DISPLAY_TIME;
@@ -2409,12 +2415,28 @@ function performMerge(a, b) {
   const newLevel = level + 1;
   const isNewUnlock = newLevel > maxLevelReached;
   maxLevelReached = Math.max(maxLevelReached, newLevel);
+  // Награда за открытие — только за каждый третий слайм коллекции (3-й, 6-й, 9-й)
+  // и только при первом в жизни открытии: всего 6 наград на три мира
+  const entity = entityIdOf(currentThemeId, newLevel);
+  const collectionOrder = Object.keys(collectionLevels(currentThemeId)).map(Number).sort((a, b) => a - b);
+  const collectionPos = collectionOrder.indexOf(newLevel) + 1;
+  const rewardDiscovery = newLevel >= THEME_BASE_FROM
+    && collectionPos > 0
+    && collectionPos % BH_DISCOVERY_EVERY === 0
+    && !progress.isSlimeUnlocked(entity);
   if (newLevel >= THEME_BASE_FROM) {
-    progress.markSlimeUnlocked(entityIdOf(currentThemeId, newLevel));
+    progress.markSlimeUnlocked(entity);
   }
   updateUI();
   reportScore(score);
+  const boosterWasOpen = !!boostersUnlocked.blackhole;
   if (isNewUnlock && isSpecialLevel(newLevel)) triggerUnlock(newLevel);
+  if (rewardDiscovery && boostersUnlocked.blackhole && (boosterCharges.blackhole | 0) < BH_MAX_CHARGES) {
+    grantBooster('blackhole');
+    // при самом открытии бустера свою подсказку показывает unlockBoostersThrough
+    if (boosterWasOpen) setTimeout(() => { pulseBooster(); showBoosterToast('New discovery! +1 Black Hole'); }, 1700);
+  }
+  addBoosterEnergy(newLevel, comboCount);
 
   applyBlastWave(anchorX, midY, level + 1);
 
@@ -2562,11 +2584,13 @@ function loadBoosterPersist() {
     const c = JSON.parse(localStorage.getItem(AD_KEY) || 'null');
     if (c && typeof c === 'object') {
       for (const key of Object.keys(BOOSTER_DEFS)) {
-        if (Number.isFinite(c[key])) boosterCharges[key] = Math.max(0, Math.min(5, Math.round(c[key])));
+        if (Number.isFinite(c[key])) boosterCharges[key] = Math.max(0, Math.min(BH_MAX_CHARGES, Math.round(c[key])));
       }
     }
     const u = JSON.parse(localStorage.getItem(AD_UNLOCK_KEY) || 'null');
     if (u && typeof u === 'object') boostersUnlocked = u;
+    const e = Number(localStorage.getItem(BH_ENERGY_KEY));
+    bhEnergy = Number.isFinite(e) ? Math.max(0, Math.min(BH_ENERGY_MAX - 1, e)) : 0;
   } catch (e) {}
   for (const key of Object.keys(BOOSTER_DEFS)) {
     if (maxLevelReached >= BOOSTER_DEFS[key].unlockLevel) boostersUnlocked[key] = true;
@@ -2594,7 +2618,6 @@ function setupBoostersUI() {
       boosterEls[key] = btn;
       btn.addEventListener('click', () => onBoosterClick(key));
     }
-    if (adCloseBtn) adCloseBtn.addEventListener('click', closeAdOverlay);
     if (bhConfirmYesBtn) bhConfirmYesBtn.addEventListener('click', confirmBhConsume);
     if (bhConfirmNoBtn) bhConfirmNoBtn.addEventListener('click', closeBhConfirm);
     if (bhCancelBtn) bhCancelBtn.addEventListener('click', () => exitBlackHoleMode(false));
@@ -2618,16 +2641,130 @@ function onBoosterClick(key) {
     showBoosterToast(btn ? btn.dataset.hint : '');
     return;
   }
+  const coolLeft = bhCooldownUntil - performance.now();
+  if (coolLeft > 0) {
+    showBoosterToast(`Recharging… ${Math.ceil(coolLeft / 1000)}s`);
+    return;
+  }
   if (boosterCharges[key] > 0) {
     enterBlackHoleMode();
-  } else {
+  } else if (!adRefillUsed && ads.rewardedAvailable) {
     askConfirm({
       title: 'BLACK HOLE',
       text: 'Watch a short ad to get +1 Black Hole?',
       yes: 'WATCH AD',
       onYes: () => startRewardAd(key)
     });
+  } else {
+    showBoosterToast(`Merge slimes to charge it — ${Math.floor(bhEnergy / BH_ENERGY_MAX * 100)}%`);
   }
+}
+
+// Энергия за слияния: чем выше новый слайм, тем больше; комбо помогает, но ограниченно
+function addBoosterEnergy(newLevel, combo) {
+  if (!boostersUnlocked.blackhole) return;
+  if ((boosterCharges.blackhole | 0) >= BH_MAX_CHARGES) return;
+  bhEnergy += newLevel * Math.min(Math.max(1, combo), BH_ENERGY_COMBO_CAP);
+  if (bhEnergy >= BH_ENERGY_MAX) {
+    bhEnergy -= BH_ENERGY_MAX;
+    grantBooster('blackhole');
+    pulseBooster();
+    showBoosterToast('+1 Black Hole — charged by merging!');
+  }
+  saveBoosterEnergy();
+  updateBoosterUI();
+}
+
+function pulseBooster() {
+  const btn = boosterEls.blackhole;
+  if (!btn) return;
+  btn.classList.remove('gained');
+  void btn.offsetWidth;
+  btn.classList.add('gained');
+}
+
+function saveBoosterEnergy() {
+  try { localStorage.setItem(BH_ENERGY_KEY, String(Math.round(bhEnergy))); } catch (e) {}
+}
+
+// Кольцо энергии и перезарядка на кнопке — обновляем, только когда значение меняется
+let lastBoosterRing = '';
+function updateBoosterRing(now) {
+  const btn = boosterEls.blackhole;
+  if (!btn) return;
+  const coolLeft = bhCooldownUntil - now;
+  const cooling = coolLeft > 0;
+  const fill = cooling
+    ? 1 - coolLeft / BH_COOLDOWN
+    : (boosterCharges.blackhole | 0) >= BH_MAX_CHARGES ? 1 : bhEnergy / BH_ENERGY_MAX;
+  const key = (cooling ? 'c' : 'e') + Math.round(fill * 100);
+  if (key === lastBoosterRing) return;
+  lastBoosterRing = key;
+  btn.style.setProperty('--bh-fill', fill.toFixed(2));
+  btn.classList.toggle('cooling', cooling);
+}
+
+// Спасение: слайм переваливается через край — физика на паузе, можно потратить заряд
+// (или посмотреть рекламу, если зарядов нет) и съесть падающий слайм. Раз за партию.
+// Спасение — за просмотр видео (раз за партию). Заряд тратится, только если реклама
+// недоступна (блокировщик или не CrazyGames) — чтобы и без рекламы спасение работало.
+function onSlimeFlownOut(slime) {
+  slime.flownOut = true;
+  if (rescueUsed || rescuePending || isGameOver || !boostersUnlocked.blackhole) return;
+  const viaAd = ads.rewardedAvailable;
+  const withCharge = !viaAd && (boosterCharges.blackhole | 0) > 0;
+  if (!viaAd && !withCharge) return;
+  rescuePending = true;
+  if (bhMode) exitBlackHoleMode(false);
+  askConfirm({
+    title: 'SAVE IT?',
+    text: withCharge
+      ? 'A slime is falling out! Use a Black Hole to save the game?'
+      : 'A slime is falling out! Watch a short video to save the game?',
+    yes: withCharge ? 'SAVE' : 'WATCH VIDEO',
+    no: 'LET IT FALL',
+    seeThrough: true,
+    onYes: () => {
+      if (withCharge) {
+        consumeBooster('blackhole');
+        doRescue();
+      } else {
+        setTimescale(0);
+        startRewardAd('blackhole', {
+          onReward: () => {},
+          onDone: granted => (granted ? doRescue() : releaseRescue()),
+          // отдельное место показа — лимит «реклама за заряд» не тратит
+          countsAsRefill: false
+        });
+      }
+    },
+    onNo: releaseRescue
+  });
+}
+
+function doRescue() {
+  rescueUsed = true;
+  rescuePending = false;
+  for (const s of slimes.slice()) {
+    if (s.flownOut && !s.body.isRemoved) consumeSlimeWithBlackHole(s);
+  }
+  setTimescale(bhMode ? 0.25 : 1);
+  showBoosterToast('Saved by the Black Hole!');
+}
+
+function releaseRescue() {
+  rescueUsed = true;
+  rescuePending = false;
+  setTimescale(bhMode ? 0.25 : 1);
+}
+
+// Новая партия: разовые лимиты сбрасываются, заряды и энергия остаются
+function resetBoosterRun() {
+  adRefillUsed = false;
+  rescueUsed = false;
+  rescuePending = false;
+  bhCooldownUntil = 0;
+  lastBoosterRing = '';
 }
 
 // Подсказка слева от кнопки бустера — hover-подсказки на телефонах не видны
@@ -2659,8 +2796,8 @@ function updateBoosterUI() {
     const hintText = !unlocked
       ? `Get ${getSlimeConfig(BOOSTER_DEFS[key].unlockLevel, currentThemeId).name} to unlock ${BOOSTER_NAMES[key]}`
       : count > 0
-        ? `${BOOSTER_NAMES[key]} — ${count} in stock`
-        : `${BOOSTER_NAMES[key]} — watch an ad to get +1`;
+        ? `${BOOSTER_NAMES[key]} — ${count} of ${BH_MAX_CHARGES}`
+        : `${BOOSTER_NAMES[key]} — merge slimes to charge it`;
     btn.dataset.hint = hintText;
     btn.title = hintText;
   }
@@ -2678,7 +2815,8 @@ function positionBoosterStickers() {
     if (!btn) continue;
     const w = btn.offsetWidth || 40;
     const h = btn.offsetHeight || 40;
-    btn.style.left = Math.max(0, Math.round(canvasRect.width - w)) + 'px';
+    // Отступ от края: вокруг кнопки рисуется кольцо энергии, рамка поля его не должна резать
+    btn.style.left = Math.max(0, Math.round(canvasRect.width - w - 8)) + 'px';
     btn.style.top = Math.round(top) + 'px';
     top += h + gap;
   }
@@ -2711,7 +2849,7 @@ function consumeBooster(key) {
 }
 
 function grantBooster(key) {
-  boosterCharges[key] = Math.min(5, (boosterCharges[key] | 0) + 1);
+  boosterCharges[key] = Math.min(BH_MAX_CHARGES, (boosterCharges[key] | 0) + 1);
   saveBoosterCharges();
   updateBoosterUI();
 }
@@ -2850,6 +2988,7 @@ function confirmBhConsume() {
   }
   consumeSlimeWithBlackHole(slime);
   consumeBooster('blackhole');
+  bhCooldownUntil = performance.now() + BH_COOLDOWN;
   bhConfirmTarget = null;
   if (bhConfirmOverlay) bhConfirmOverlay.classList.add('hidden');
   exitBlackHoleMode(true);
@@ -2871,51 +3010,33 @@ function consumeSlimeWithBlackHole(slime) {
   sfx.playBlackHole();
 }
 
-function startRewardAd(key) {
+async function startRewardAd(key, opts = {}) {
   if (adJob || isGameOver) return;
-  if (window.neonAds && typeof window.neonAds.showRewarded === 'function') {
-    window.neonAds.showRewarded({ onGrant: () => grantBooster(key), onClose: () => {} });
-    return;
+  const onReward = opts.onReward || (() => grantBooster(key));
+  const onDone = opts.onDone || (() => {});
+  adJob = { key };
+  const granted = await ads.rewarded();
+  adJob = null;
+  if (granted) {
+    // Лимит «реклама за заряд раз за партию» расходуется только на досмотренный ролик
+    if (opts.countsAsRefill !== false) adRefillUsed = true;
+    onReward();
+    sfx.playReward();
+  } else {
+    showBoosterToast('No ad available right now — try later');
   }
-  if (!adOverlay || !adMessageEl || !adProgressBarEl || !adCloseBtn || !adRewardEl) return;
-  adCloseBtn.classList.add('hidden');
-  adRewardEl.classList.add('hidden');
-  adProgressBarEl.style.width = '0%';
-  adMessageEl.textContent = 'Loading ad…';
-  adOverlay.classList.remove('hidden');
-  adJob = { key, t0: performance.now(), dur: 3400, stop: null, granted: false };
-  const tick = () => {
-    if (!adJob) return;
-    const elapsed = performance.now() - adJob.t0;
-    const p = Math.min(elapsed / adJob.dur, 1);
-    adProgressBarEl.style.width = `${(p * 100).toFixed(1)}%`;
-    if (p < 0.3) {
-      adMessageEl.textContent = 'Loading ad…';
-    } else if (p < 1) {
-      adMessageEl.textContent = `Ad… ${Math.ceil((1 - p) * adJob.dur / 1000)}s`;
-    } else if (!adJob.granted) {
-      adJob.granted = true;
-      grantBooster(adJob.key);
-      sfx.playReward();
-      adMessageEl.textContent = 'Booster received!';
-      adRewardEl.classList.remove('hidden');
-      adCloseBtn.classList.remove('hidden');
-    }
-  };
-  tick();
-  const iv = setInterval(tick, 120);
-  adJob.stop = () => clearInterval(iv);
+  onDone(granted);
 }
 
+
+// Ролик показывает сам SDK; здесь только сбрасываем флаг на случай выхода из партии
 function closeAdOverlay() {
-  if (adOverlay) adOverlay.classList.add('hidden');
-  if (adJob) {
-    adJob.stop();
-    adJob = null;
-  }
+  adJob = null;
 }
 
 function checkGameOver() {
+  // Игрок решает, спасать ли падающий слайм, — партия пока не кончается
+  if (rescuePending) return;
   const t = wallT();
   for (const slime of slimes) {
     if (slime.body.isRemoved) continue;
@@ -2930,7 +3051,7 @@ function checkGameOver() {
     }
 
     if (!slime.flownOut && pos.y - slime.config.radius * layoutScale > bowlYBottom + t) {
-      slime.flownOut = true;
+      onSlimeFlownOut(slime);
       continue;
     }
   }
@@ -2938,11 +3059,18 @@ function checkGameOver() {
 
 function triggerGameOver() {
   isGameOver = true;
+  tutorial.stop();
+  ads.gameplayStop();
+  finishedGames += 1;
+  midgameDue = finishedGames >= 2 && performance.now() - gameStartTime >= MIDGAME_MIN_GAME_MS;
   Runner.stop(runner);
   stopBoosterEffects();
   sfx.playGameOver();
   gameEndTime = performance.now();
+  const hadRecord = highScore > 0;
   isNewRecord = score > highScore;
+  // Побил прежний рекорд — момент для праздника на CrazyGames (первая партия не в счёт)
+  if (isNewRecord && hadRecord) ads.happytime();
   if (isNewRecord) {
     highScore = score;
     progress.setHighScore(currentThemeId, score);
@@ -3150,6 +3278,7 @@ function stopGameOverAnim() {
 }
 
 function restartGame() {
+  resetBoosterRun();
   isGameOver = false;
   score = 0;
   maxLevelReached = 1;
@@ -3209,10 +3338,14 @@ function restartGame() {
   updateUI();
   updateHighScoreUI();
   leaderboardRestart();
+  startTutorial();
+  ads.gameplayStart();
 }
 
 function backToMain() {
   isGameOver = true;
+  tutorial.stop();
+  ads.gameplayStop();
   if (gameLoopRaf) {
     cancelAnimationFrame(gameLoopRaf);
     gameLoopRaf = 0;
@@ -3390,6 +3523,7 @@ function gameLoop() {
   }
   updateTargetHover();
   updateUnlockFly();
+  updateBoosterRing(now);
   updateCollectionBar();
   // Под оверлеем Game Over стоит backdrop-filter: каждая перерисовка сцены заставила бы
   // браузер заново считать размытие. Физика уже остановлена — достаточно последнего кадра.
@@ -3411,7 +3545,7 @@ function renderCustom() {
   drawStars(ctx, now);
   drawDust(ctx, now);
   if (currentThemeId === 'animals') drawMeadowAmbience(ctx, now);
-  else if (currentThemeId === 'ocean') drawOceanAmbience(ctx, now);
+  else if (currentThemeId === 'ocean') drawChatAmbience(ctx, now);
   drawBowl(ctx);
   drawMergeEffects(ctx);
   drawTentacles(ctx, now);
@@ -3621,20 +3755,23 @@ function drawBackground(ctx, width, height) {
     return;
   }
   if (currentThemeId === 'ocean') {
-    baseGrad.addColorStop(0, '#031326');
-    baseGrad.addColorStop(0.55, '#020e1d');
-    baseGrad.addColorStop(1, '#010812');
+    // Мир эмодзи — тёмный «мессенджер»: фиолетовый фон, розовое и голубое свечение
+    baseGrad.addColorStop(0, '#1B1038');
+    baseGrad.addColorStop(0.55, '#140C2E');
+    baseGrad.addColorStop(1, '#0D0822');
     ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, width, height);
-    // soft teal glow from the depths
-    const gx = width * 0.5;
-    const gy = height * 0.95;
-    const gr = width * 0.6;
-    const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
-    glow.addColorStop(0, 'rgba(30, 140, 190, 0.07)');
-    glow.addColorStop(1, 'rgba(30, 140, 190, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
+    const glows = [
+      [width * 0.85, height * 0.15, width * 0.7, 'rgba(255, 79, 163, 0.12)'],
+      [width * 0.1, height * 0.85, width * 0.75, 'rgba(111, 216, 255, 0.08)']
+    ];
+    for (const [gx, gy, gr, col] of glows) {
+      const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+      glow.addColorStop(0, col);
+      glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, width, height);
+    }
     return;
   }
   baseGrad.addColorStop(0, '#07081c');
@@ -3758,56 +3895,6 @@ function drawMeadowAmbience(ctx, now) {
   }
 }
 
-function drawOceanAmbience(ctx, now) {
-  const w = canvasRect.width;
-  const h = canvasRect.height;
-
-  // Bubbles rising from the bottom with a gentle sine sway
-  const bubbles = lowPower ? 12 : 20;
-  for (let i = 0; i < bubbles; i++) {
-    const period = 9000 + (i % 5) * 1400;
-    const t = ((now * 0.00045 + i * 0.127) % 1);
-    const by = h + 6 - t * (h + 30);
-    const bx = w * (0.06 + 0.88 * ((i * 37) % 97) / 97) + Math.sin(now * 0.0006 + i * 2.3 + t * 4) * w * 0.03;
-    const fade = Math.min(1, t * 5) * Math.min(1, (1 - t) * 5);
-    if (fade <= 0.03) continue;
-    const r = 1.2 + (i % 4) * 0.9 + Math.sin(now * 0.001 + i * 1.7) * 0.3;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(bx, by, Math.max(0.6, r), 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(170, 230, 255, ${0.35 * fade})`;
-    ctx.lineWidth = 1.1;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(bx - r * 0.3, by - r * 0.3, r * 0.28, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(230, 250, 255, ${0.5 * fade})`;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Sunrays: slowly drifting diagonal refresherr - volumetric caustics
-  const rays = 3;
-  for (let i = 0; i < rays; i++) {
-    const ox = (now * 0.000045 * (i % 2 === 0 ? 1 : -1) + i * 7.7) % (w + 200);
-    const rx = ((ox % (w + 200)) + w + 200) % (w + 200) - 100;
-    const alpha = 0.03 + 0.02 * Math.sin(now * 0.0003 + i * 2.4);
-    if (alpha <= 0.01) continue;
-    const sway = Math.sin(now * 0.00015 + i * 1.3) * w * 0.04;
-    const beamW = w * (0.07 + (i % 2) * 0.03);
-    const grad = ctx.createLinearGradient(rx + sway, 0, rx + beamW + sway, h);
-    grad.addColorStop(0, `rgba(150, 215, 255, ${alpha})`);
-    grad.addColorStop(0.6, `rgba(120, 190, 245, ${alpha * 0.4})`);
-    grad.addColorStop(1, `rgba(120, 190, 245, 0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(rx + sway, -6);
-    ctx.lineTo(rx + beamW + sway, -6);
-    ctx.lineTo(rx + beamW + sway + w * 0.12, h + 6);
-    ctx.lineTo(rx + sway + w * 0.12, h + 6);
-    ctx.closePath();
-    ctx.fill();
-  }
-}
 
 function drawStars(ctx, now) {
   const w = canvasRect.width;
@@ -3865,9 +3952,266 @@ function roundedPolygon(ctx, pts, radius) {
   ctx.closePath();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// МИР ЭМОДЗИ — «переписка в чате»: обои мессенджера, прокручивающиеся пузыри
+// сообщений, «печатает…», всплывающие сердечки-реакции и чаша в виде пузыря.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const chatBubbles = [];
+let chatScrollSpan = 0;
+
+// Статичный слой: едва заметные «обои чата» — сердечки, звёздочки, смайлы, пузыри
+function buildChatBackground() {
+  nebulas.length = 0;
+  cosmicDust.length = 0;
+  const w = canvasRect.width;
+  const h = canvasRect.height;
+  starLayer = document.createElement('canvas');
+  starLayer.width = Math.max(1, Math.round(w * dpr));
+  starLayer.height = Math.max(1, Math.round(h * dpr));
+  const sg = starLayer.getContext('2d');
+  sg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sg.lineWidth = 1.4;
+  sg.lineCap = 'round';
+  sg.lineJoin = 'round';
+  const cell = 52;
+  let k = 0;
+  for (let y = cell * 0.5; y < h + cell; y += cell) {
+    for (let x = cell * ((Math.floor(y / cell) % 2) ? 0.5 : 0); x < w + cell; x += cell) {
+      k++;
+      const jx = x + (Math.random() - 0.5) * 14;
+      const jy = y + (Math.random() - 0.5) * 14;
+      sg.save();
+      sg.translate(jx, jy);
+      sg.rotate((Math.random() - 0.5) * 0.6);
+      sg.strokeStyle = `rgba(${k % 3 === 0 ? '255, 150, 210' : '170, 160, 255'}, ${0.07 + Math.random() * 0.04})`;
+      const kind = k % 5;
+      sg.beginPath();
+      if (kind === 0) {
+        slimeHeartPath(sg, 0, 0, 7);
+      } else if (kind === 1) {
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+          const b = a + Math.PI / 5;
+          sg.lineTo(Math.cos(a) * 7, Math.sin(a) * 7);
+          sg.lineTo(Math.cos(b) * 3, Math.sin(b) * 3);
+        }
+        sg.closePath();
+      } else if (kind === 2) {
+        sg.arc(0, 0, 7, 0, Math.PI * 2);
+        sg.moveTo(-3.6, 1.6);
+        sg.quadraticCurveTo(0, 5, 3.6, 1.6);
+        sg.moveTo(-2.6, -2);
+        sg.arc(-2.6, -2, 0.6, 0, Math.PI * 2);
+        sg.moveTo(2.6, -2);
+        sg.arc(2.6, -2, 0.6, 0, Math.PI * 2);
+      } else if (kind === 3) {
+        if (sg.roundRect) sg.roundRect(-9, -6, 18, 11, 5);
+        else sg.rect(-9, -6, 18, 11);
+        sg.moveTo(-5, 5);
+        sg.lineTo(-7, 9);
+        sg.lineTo(-1, 5);
+      } else {
+        sg.moveTo(0, -6); sg.lineTo(0, 6);
+        sg.moveTo(-6, 0); sg.lineTo(6, 0);
+      }
+      sg.stroke();
+      sg.restore();
+    }
+  }
+
+  // Пузыри переписки: входящие слева, исходящие справа, прокручиваются вверх по кругу
+  chatBubbles.length = 0;
+  const count = lowPower ? 6 : 9;
+  let y = 0;
+  for (let i = 0; i < count; i++) {
+    const out = Math.random() < 0.5;
+    const lines = 1 + (Math.random() < 0.45 ? 1 : 0);
+    const bw = Math.min(170, w * (0.26 + Math.random() * 0.14));
+    const bh = lines === 1 ? 28 : 44;
+    chatBubbles.push({
+      out,
+      w: bw,
+      h: bh,
+      lines: Array.from({ length: lines }, (_, j) => (j === lines - 1 ? 0.4 + Math.random() * 0.4 : 0.75 + Math.random() * 0.2)),
+      heart: Math.random() < 0.3,
+      y
+    });
+    y += bh + 26 + Math.random() * 40;
+  }
+  chatScrollSpan = Math.max(h + 80, y);
+}
+
+// Живой слой: пузыри медленно уезжают вверх, «печатает…», сердечки-реакции
+function drawChatAmbience(ctx, now) {
+  const w = canvasRect.width;
+  const h = canvasRect.height;
+  const scroll = now * 0.012;
+  for (const b of chatBubbles) {
+    const y = h + 20 - ((b.y + scroll) % chatScrollSpan);
+    if (y < -b.h - 10 || y > h + 10) continue;
+    const x = b.out ? w - 12 - b.w : 12;
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, b.w, b.h, 13);
+    else ctx.rect(x, y, b.w, b.h);
+    if (b.out) {
+      const g = ctx.createLinearGradient(x, y, x + b.w, y + b.h);
+      g.addColorStop(0, '#FF4FA3');
+      g.addColorStop(1, '#8B5CF6');
+      ctx.fillStyle = g;
+    } else {
+      ctx.fillStyle = '#7C8DB8';
+    }
+    ctx.fill();
+    // хвостик пузыря
+    ctx.beginPath();
+    const tx = b.out ? x + b.w - 4 : x + 4;
+    ctx.moveTo(tx, y + b.h - 10);
+    ctx.quadraticCurveTo(b.out ? tx + 9 : tx - 9, y + b.h + 3, b.out ? tx - 8 : tx + 8, y + b.h);
+    ctx.closePath();
+    ctx.fill();
+    // строки «текста»
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = '#FFFFFF';
+    b.lines.forEach((frac, j) => {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x + 11, y + 10 + j * 15, (b.w - 22) * frac, 7, 3.5);
+      else ctx.rect(x + 11, y + 10 + j * 15, (b.w - 22) * frac, 7);
+      ctx.fill();
+    });
+    // реакция-сердечко на углу
+    if (b.heart) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#FF4F7B';
+      ctx.beginPath();
+      slimeHeartPath(ctx, b.out ? x + 4 : x + b.w - 4, y + b.h - 2, 6);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // «печатает…» — пузырь с тремя прыгающими точками
+  const ty = h * 0.3;
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  ctx.fillStyle = '#7C8DB8';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(12, ty, 54, 26, 13);
+  else ctx.rect(12, ty, 54, 26);
+  ctx.fill();
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = '#FFFFFF';
+  for (let i = 0; i < 3; i++) {
+    const hop = Math.max(0, Math.sin(now * 0.008 - i * 0.9)) * 3.5;
+    ctx.beginPath();
+    ctx.arc(27 + i * 12, ty + 13 - hop, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Сердечки-реакции поднимаются справа и тают
+  for (let i = 0; i < 5; i++) {
+    const t = ((now * 0.00012 + i * 0.21) % 1);
+    const hx = w * (0.78 + (i % 3) * 0.07) + Math.sin(now * 0.002 + i * 1.7) * 8;
+    const hy = h * 0.9 - t * h * 0.5;
+    const a = Math.sin(t * Math.PI) * 0.4;
+    if (a < 0.02) continue;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = i % 2 ? '#FF4F7B' : '#FF8FC0';
+    ctx.beginPath();
+    slimeHeartPath(ctx, hx, hy, 5 + (i % 3) * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// Чаша-сообщение: контур пузыря по стенкам, хвостик внизу слева, «прочитано» под ней.
+// Контур рисуется снаружи физической линии стенок, чтобы не перекрывать слаймы.
+function drawChatBowl(ctx) {
+  const { centerX, yB, yT, bb, bt2, btM, lipH, t } = bowlProfile();
+  const o = Math.max(5, t * 0.45);
+  const wallTopY = yT + lipH;
+  const R = Math.min(bb * 0.4, (yB - yT) * 0.22);
+
+  const outline = () => {
+    ctx.beginPath();
+    ctx.moveTo(centerX - btM - o, yT);
+    ctx.lineTo(centerX - bt2 - o, wallTopY);
+    ctx.arcTo(centerX - bb - o, yB + o, centerX, yB + o, R);
+    ctx.arcTo(centerX + bb + o, yB + o, centerX + bt2 + o, wallTopY, R);
+    ctx.lineTo(centerX + bt2 + o, wallTopY);
+    ctx.lineTo(centerX + btM + o, yT);
+  };
+
+  // заливка пузыря — как исходящее сообщение, полупрозрачная
+  ctx.save();
+  outline();
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(centerX - bb, yT, centerX + bb, yB);
+  fill.addColorStop(0, 'rgba(255, 79, 163, 0.16)');
+  fill.addColorStop(1, 'rgba(139, 92, 246, 0.2)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.restore();
+
+  const stroke = ctx.createLinearGradient(centerX - bb, yT, centerX + bb, yB);
+  stroke.addColorStop(0, '#FF6FB5');
+  stroke.addColorStop(0.5, '#B07CFF');
+  stroke.addColorStop(1, '#6FD8FF');
+
+  // хвостик сообщения внизу слева
+  ctx.save();
+  ctx.fillStyle = stroke;
+  ctx.shadowColor = 'rgba(200, 120, 255, 0.8)';
+  ctx.shadowBlur = 10;
+  const bx = centerX - bb - o;
+  const by = yB + o;
+  ctx.beginPath();
+  ctx.moveTo(bx + R * 0.15, by - R * 0.9);
+  ctx.quadraticCurveTo(bx - o * 0.6, by + o * 0.6, bx - o * 2.6, by + o * 1.6);
+  ctx.quadraticCurveTo(bx + R * 0.4, by + o * 1.4, bx + R * 1.1, by + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // неоновый контур
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(4, t * 0.5);
+  ctx.shadowColor = 'rgba(200, 120, 255, 0.85)';
+  ctx.shadowBlur = 14;
+  outline();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 1.2;
+  outline();
+  ctx.stroke();
+  ctx.restore();
+
+  // «✓✓ Read 12:45» под пузырём справа
+  ctx.save();
+  ctx.font = '700 11px Montserrat, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  const readX = centerX + bb + o;
+  const readW = ctx.measureText('Read 12:45').width;
+  ctx.fillStyle = 'rgba(220, 210, 255, 0.6)';
+  ctx.fillText('Read 12:45', readX, yB + o + 8);
+  ctx.fillStyle = 'rgba(111, 216, 255, 0.85)';
+  ctx.fillText('✓✓', readX - readW - 5, yB + o + 8);
+  ctx.restore();
+}
+
 function drawBowl(ctx) {
   if (!bowlBody) return;
   if (currentThemeId === 'animals') { drawJungleBowl(ctx); return; }
+  if (currentThemeId === 'ocean') { drawChatBowl(ctx); return; }
   const { centerX, bottomY, t, wallHeight, bb, bt, yB, yT, ox, oy, lipH, bt2, btM } = bowlProfile();
 
   const now = performance.now();
@@ -4080,7 +4424,6 @@ function drawBowl(ctx) {
   ctx.clip();
   if (bs.theme === 'space') drawSpaceDecor(ctx, now, yB, yT, centerX, halfAt);
   else if (bs.theme === 'meadow') drawMeadowDecor(ctx, now, yB, bb, halfAt);
-  else if (bs.theme === 'ocean') drawOceanDecor(ctx, now, yB, yT, centerX, bb, halfAt);
   ctx.restore();
 
   // 3. Neon inner rim: thin pulsing cyan edge on a gentle outward bow
@@ -4356,44 +4699,6 @@ function drawMeadowDecor(ctx, now, yB, bb, halfAt) {
   }
 }
 
-function drawOceanDecor(ctx, now, yB, yT, centerX, bb, halfAt) {
-  const bubbles = 9;
-  for (let i = 0; i < bubbles; i++) {
-    const t = (now * 0.00022 + i * 0.131) % 1;
-    const y = yB - 4 - t * (yB - yT - 12);
-    const half = halfAt(y);
-    const x = centerX + Math.sin(now * 0.0006 + i * 2.2) * half * 0.5 + ((i % 3) - 1) * half * 0.3;
-    const pr = 1.6 + (i % 4) * 0.9;
-    const a = 0.35 * (1 - Math.abs(t - 0.5) * 2) * 0.6;
-    if (a <= 0.02) continue;
-    ctx.strokeStyle = `rgba(200, 240, 255, ${a})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x, y, pr, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = `rgba(255, 255, 255, ${a * 0.5})`;
-    ctx.beginPath();
-    ctx.arc(x - pr * 0.3, y - pr * 0.3, pr * 0.25, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const weeds = 10;
-  ctx.lineCap = 'round';
-  const slots = [-0.78, -0.5, -0.24, 0.24, 0.5, 0.78];
-  const offs = [0, 1.2, -1.3, 1.5, -0.7, 0.9];
-  for (let i = 0; i < slots.length; i++) {
-    const wx = slots[i] * bb * 0.8;
-    const baseY = yB + 1;
-    const hgt = 16 + (i % 3) * 7 + Math.sin(now * 0.0025 + i * 1.4) * 3;
-    const sway = Math.sin(now * 0.002 + i * 2.1) * 4;
-    const green = 150 + (i % 3) * 40;
-    ctx.strokeStyle = `rgba(40, ${green}, 170, 0.4)`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(wx, baseY + 2);
-    ctx.quadraticCurveTo(wx + offs[i], baseY - hgt * 0.55, wx + sway, baseY - hgt);
-    ctx.stroke();
-  }
-}
 
 function drawMergeEffects(ctx) {
   for (const effect of mergeEffects) {
@@ -4770,8 +5075,8 @@ function drawAnimalBody(ctx, slime, config, sizeX, sizeY, chamfer, now, opacity,
 
 function drawEmojiSlimeBody(ctx, slime, config, r, now, opacity, glowColor, glowBlur) {
   ctx.save();
+  // Без орбитальных точек ауры: они проходят по гладкому лицу и выглядят как пятна
   drawEmojiSlime(ctx, config, r, now, opacity, { glowBlur, seed: slime.seed });
-  drawAura(ctx, config, r, now, opacity, glowColor);
   ctx.restore();
 }
 function drawPanelAnimal(g, slime, config, r, opacity, now = 0) {
@@ -6571,7 +6876,7 @@ function drawAccessory(ctx, slime, sizeX, sizeY, glowColor) {
     ctx.fillStyle = glowColor;
     ctx.strokeStyle = glowColor;
     ctx.lineWidth = 1.4;
-    if (slime.config.isPlanet) {
+    if (slime.config.isPlanet || slime.config.isEmoji) {
       drawRoundHorns(ctx, sizeX / 2, glowColor);
     } else {
       drawSquareHorns(ctx, sizeX, sizeY, glowColor);
