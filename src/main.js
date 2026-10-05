@@ -1899,11 +1899,10 @@ function handleTouchStart(e) {
     bhDragAim = false;
     return;
   }
-  // Слайм прыгает под палец, дальше тянется за ним относительно — тап сбоку роняет туда, куда тапнули
+  // Слайм не прыгает под палец: он остаётся на месте и сдвигается ровно на столько, на сколько
+  // провели пальцем. Простой тап роняет его там, где он сейчас, — случайное касание сбоку не сбивает прицел.
   dragOriginX = ax;
-  dragStartPreviewX = clampDropX(ax);
-  targetX = dragStartPreviewX;
-  updatePreviewPosition();
+  dragStartPreviewX = clampDropX(Number.isFinite(targetX) ? targetX : canvasRect.width / 2);
 }
 
 function handleTouchMove(e) {
