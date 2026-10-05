@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#080810">
-  <title>Neon Slime Balance</title>
+  <title>Neon Slime</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/slime-cosmo/assets/index-j1aY61HT.js"></script>
-  <link rel="stylesheet" crossorigin href="/slime-cosmo/assets/index-oCMTE0VC.css">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&family=Lilita+One&family=Montserrat:wght@700;800;900&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet">
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+  <script type="module" crossorigin src="./assets/index-DSBtjRyr.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DPjredFi.css">
 </head>
 <body>
   <div class="game-container">
@@ -49,6 +50,22 @@
           <button id="bh-cancel" class="bh-cancel">CANCEL</button>
         </div>
         <div id="booster-toast" class="booster-toast hidden" role="status"></div>
+        <div id="coach" class="coach hidden" role="status" aria-live="polite">
+          <div class="coach-hand" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="34" height="34">
+              <path d="M12 15V6.5a2.5 2.5 0 0 1 5 0V14l6.2 1.5a3 3 0 0 1 2.3 3.3l-.9 6.4A4.5 4.5 0 0 1 20.1 29h-4.3a4.5 4.5 0 0 1-3.5-1.7l-5.5-6.9a2.1 2.1 0 0 1 3.1-2.8L12 19.5z" fill="#fff" stroke="#0b1030" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="coach-card">
+            <div class="coach-demo" aria-hidden="true">
+              <span class="coach-block a"></span><span class="coach-plus">+</span><span class="coach-block a"></span><span class="coach-plus">→</span><span class="coach-block b"></span>
+            </div>
+            <div class="coach-text"></div>
+            <div class="coach-keys" aria-label="Or use the keyboard: left and right arrows to aim, Space to drop">
+              or <kbd>←</kbd><kbd>→</kbd> to aim · <kbd>Space</kbd> to drop
+            </div>
+          </div>
+        </div>
 
         <div id="hud" class="hud">
           <div class="glass-panel hud-bar" role="status" aria-live="polite">
@@ -65,7 +82,9 @@
           </div>
           <div class="hud-actions">
             <button id="lb-toggle" class="lb-toggle" aria-label="Leaderboard">TOP</button>
-            <button id="restart-btn" class="restart-btn" aria-label="Restart">⟳</button>
+            <button id="menu-btn" class="restart-btn menu-btn" aria-label="Menu">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </button>
           </div>
         </div>
 
@@ -91,7 +110,10 @@
   <div id="start-screen" class="overlay start-overlay">
     <canvas id="start-canvas" class="overlay-bg start-canvas" aria-hidden="true"></canvas>
     <div class="start-overlay-ui">
-      <h1 class="start-title">NEON SLIME BALANCE</h1>
+      <h1 class="start-title" aria-label="Neon Slime">
+        <span class="t-neon" aria-hidden="true">NEON</span>
+        <span class="t-slime" aria-hidden="true">SLIME</span>
+      </h1>
     </div>
     <div id="start-tooltip" class="start-tooltip hidden"></div>
     <div class="start-footer">
@@ -100,16 +122,6 @@
         <span id="start-record-label" class="start-record-label">Record: 0</span>
       </div>
       <button id="start-play-btn" class="neon-btn large start-play">PLAY</button>
-    </div>
-  </div>
-
-  <div id="ad-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Rewarded video">
-    <div class="overlay-content ad-content">
-      <h2 class="neon-text ad-title">REWARDED VIDEO</h2>
-      <p id="ad-message" class="ad-message">Loading ad…</p>
-      <div class="ad-progress"><span id="ad-progress-bar"></span></div>
-      <div id="ad-reward" class="ad-reward hidden">+1 BOOSTER</div>
-      <button id="ad-close-btn" class="neon-btn ad-close hidden">CONTINUE</button>
     </div>
   </div>
 
@@ -137,10 +149,23 @@
     </div>
   </div>
 
+  <div id="pause-overlay" class="overlay pause-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="overlay-content pause-content">
+      <h2 id="pause-title" class="neon-text">PAUSED</h2>
+      <div class="pause-actions">
+        <button id="pause-resume" class="pause-btn primary">Resume</button>
+        <button id="pause-sound" class="pause-btn" aria-pressed="true">Sound: on</button>
+        <button id="pause-restart" class="pause-btn">Restart</button>
+        <button id="pause-quit" class="pause-btn">Main menu</button>
+      </div>
+    </div>
+  </div>
+
   <div id="game-over-overlay" class="overlay game-over-overlay hidden" role="dialog" aria-modal="true" aria-label="Game Over">
     <canvas id="go-canvas" class="overlay-bg" aria-hidden="true"></canvas>
     <div class="game-over-card">
       <canvas id="go-confetti" class="go-confetti" aria-hidden="true"></canvas>
+      <div class="go-col go-col-main">
       <h2 class="game-over-title">GAME OVER</h2>
 
       <div class="go-hero" aria-hidden="true">
@@ -159,6 +184,9 @@
         <div class="final-score-label">Final Score</div>
         <div id="final-score" class="final-score-value">0</div>
       </div>
+      </div>
+
+      <div class="go-col go-col-side">
 
       <div class="stats-grid">
         <div class="stat-box" id="stat-best"><span class="stat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z M7 6H4a3 3 0 0 0 3 4 M17 6h3a3 3 0 0 1-3 4 M12 13v4 M8 20h8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="stat-label">Best</span><span id="final-best" class="stat-value">0</span></div>
@@ -181,6 +209,7 @@
 
       <button id="play-again-btn" class="btn-play-again">PLAY AGAIN</button>
       <button id="back-to-menu-btn" class="btn-back-to-menu">BACK TO MENU</button>
+      </div>
     </div>
   </div>
 
